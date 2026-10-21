@@ -1,0 +1,33 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_________________ test_executive_layout_and_preserved_controls _________________
+
+    def test_executive_layout_and_preserved_controls():
+        page = Page()
+        page.feed(Path('static/index.html').read_text())
+>       assert any(tag == 'body' and attrs.get('data-design') == 'executive' for tag, attrs in page.attributes)
+E       assert False
+E        +  where False = any(<generator object test_executive_layout_and_preserved_controls.<locals>.<genexpr> at 0x7f3056fd6ce0>)
+
+tests/test_premium_layout.py:23: AssertionError
+_____________ test_typography_is_self_hosted_and_motion_accessible _____________
+
+    def test_typography_is_self_hosted_and_motion_accessible():
+        css = Path('static/style.css').read_text()
+>       assert '@font-face' in css and '/static/fonts/' in css
+E       AssertionError: assert ('@font-face' in ':root{--bg:#f6f7f9;--ink:#192b2a;--muted:#7b8586;--green:#145e4d;--line:#e9edeb}*{box-sizing:border-box}body{margin:0...x;gap:12px;align-items:center;padding:12px;flex-wrap:wrap}.pagination button:disabled{opacity:.5;cursor:not-allowed}\n')
+
+tests/test_premium_layout.py:30: AssertionError
+___________ test_login_and_overview_have_distinct_editorial_layouts ____________
+
+    def test_login_and_overview_have_distinct_editorial_layouts():
+        html = Path('static/index.html').read_text()
+>       assert 'login-editorial' in html
+E       assert 'login-editorial' in '<!doctype html>\n<html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initi...e aproxima.</span><span>Os dados apresentados pertencem a este workspace.</span></footer></div></main></body></html>\n'
+
+tests/test_premium_layout.py:37: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_premium_layout.py::test_executive_layout_and_preserved_controls
+FAILED tests/test_premium_layout.py::test_typography_is_self_hosted_and_motion_accessible
+FAILED tests/test_premium_layout.py::test_login_and_overview_have_distinct_editorial_layouts
+3 failed in 0.03s

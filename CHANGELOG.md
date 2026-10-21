@@ -58,3 +58,14 @@
   8 kit aprovados, Ruff/tsc/audit limpos. Evidências em `docs/pilot/staging-evidence`.
 - Relatório e limites em `docs/pilot/PILOTO_STAGING.md`. Sem deploy/credenciais
   reais, sem certificação/conformidade/SLA/go-live declarados.
+
+## Redesign premium — 2026-10-21 — não publicado
+
+- `static/index.html`, `style.css`: identidade executive, sidebar escura, login
+  editorial, diagrama conceptual, métricas reais, formulários/chat/tabelas e mobile.
+- `static/fonts`: Manrope local com OFL; favicon e ícones SVG, sem CDN ou alteração CSP.
+- `static/app.js`: ícones das métricas e clique em elementos aninhados das sugestões.
+- 3 testes visuais de contrato vermelhos→verdes; suite 131 aprovada, Ruff limpo.
+  Chromium local: login, navegação, laboratório e mobile sem overflow/erros JS.
+  Capturas reais e notas em `docs/design/`; script opcional em `scripts/check-premium-ui.cjs`.
+- Sem alteração de backend, sem push/deploy e sem chamadas a fornecedores reais.

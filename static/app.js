@@ -2,8 +2,12 @@
 const $ = id => document.getElementById(id);
 let conversationPage=1, requestPage=1;
 let token = sessionStorage.getItem('kiazop-key') || '', data, selected, tab = 'overview';
-const names = {overview:['Visão geral','Uma visão clara do seu negócio.'], conversations:['Conversas','Cada conversa merece atenção.'], bookings:['Solicitações','Pedidos, reservas e novas oportunidades.'], simulator:['Laboratório','Um espaço para experimentar.'], settings:['O meu negócio','Um assistente à medida do seu negócio.']};
+const names = {overview:['Visão geral','O seu negócio, em perspectiva.'], conversations:['Conversas','Cada conversa merece atenção.'], bookings:['Solicitações','Pedidos, reservas e novas oportunidades.'], simulator:['Laboratório','Um espaço para experimentar.'], settings:['O meu negócio','Um assistente à medida do seu negócio.']};
 const el = (tag, text, cls) => { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; };
+function metricIcon(name){
+ const paths={clients:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',messages:'M21 11a8 8 0 0 1-8 8H8l-5 3 1-6a8 8 0 0 1-1-5 9 9 0 0 1 18 0M8 10h8M8 14h5',requests:'M8 3h8M9 3v3h6V3M7 4H5v17h14V4h-2M8 11h8M8 15h8',paused:'M7 21v-3a5 5 0 0 1 10 0v3M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0'};
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('aria-hidden','true');const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',paths[name]);path.setAttribute('stroke-linecap','round');path.setAttribute('stroke-linejoin','round');svg.append(path);return svg;
+}
 async function api(path, options={}) {
  const res = await fetch(path, {...options, headers:{'Authorization':`Bearer ${token}`, 'Content-Type':'application/json', ...options.headers}});
  if(res.status===401){ sessionStorage.removeItem('kiazop-key'); showLogin(); throw Error('Chave de administração inválida.'); }
@@ -24,13 +28,13 @@ async function refresh(){
  try{data=await api(`/api/dashboard?page=${conversationPage}&request_page=${requestPage}&page_size=25`);$('login').hidden=true;$('workspace').hidden=false;
  $('business').replaceChildren(document.createTextNode(data.business.nome),el('small',data.business.setor || 'Central de atendimento'));
  $('business-initials').textContent=data.business.nome.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
- $('mode').textContent=data.demo?'● Demonstração local':'● Modo produção';
+ $('mode').textContent=data.demo?'● Ambiente de demonstração':'● Modo produção';
  $('notice').textContent=data.demo?'Modo demonstração: dados deste ambiente, respostas locais e nenhum envio externo.':(data.stats.failed?`${data.stats.failed} mensagem(ns) com falha. `:'');
  if(data.stats.failed){const b=el('button','Agendar falhas com rejeição conhecida','outline');b.onclick=async()=>{try{await api('/api/inbox/retry',{method:'POST'});$('notice').textContent='Reprocessamento solicitado. Atualize os dados dentro de instantes.';}catch(e){$('notice').textContent=e.message;}};$('notice').append(b);}
  renderSafety();
  $('metrics').replaceChildren();
- [['Clientes atendidos',data.stats.clients,'Clientes únicos neste ambiente','♙'],['Mensagens',data.stats.messages,'Mensagens guardadas no histórico','☷'],['Solicitações',data.stats.bookings+data.stats.requests,'Pedidos a confirmar pela equipa','▦'],['Com a equipa',data.stats.paused,'Conversas com o bot em pausa','♧']].forEach(([label,note,desc,icon])=>{const card=el('div',undefined,'metric');const l=el('div',label,'metric-label');l.append(el('span',icon,'icon'));card.append(l,el('strong',String(note).padStart(2,'0')),el('small',desc));$('metrics').append(card);});
- $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.needs_human));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda está tudo tranquilo por aqui. Experimente o laboratório para iniciar a primeira conversa.','empty'));
+ [['Clientes atendidos',data.stats.clients,'Clientes únicos neste ambiente','clients'],['Mensagens',data.stats.messages,'Mensagens guardadas no histórico','messages'],['Solicitações',data.stats.bookings+data.stats.requests,'Pedidos a confirmar pela equipa','requests'],['Com a equipa',data.stats.paused,'Conversas com o bot em pausa','paused']].forEach(([label,note,desc,icon])=>{const card=el('div',undefined,'metric');const l=el('div',label,'metric-label');const mark=el('span',undefined,'icon');mark.append(metricIcon(icon));l.append(mark);card.append(l,el('strong',String(note).padStart(2,'0')),el('small',desc));$('metrics').append(card);});
+ $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.needs_human));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda não existem conversas neste ambiente. Inicie uma conversa no Laboratório para testar o atendimento.','empty'));
  $('booking-rows').replaceChildren();
  const kindLabels={agendamento:'Agendamento',reserva:'Reserva',encomenda:'Encomenda',orcamento:'Orçamento'};
  const requests=data.solicitations;
@@ -69,7 +73,7 @@ function renderConversations(){
 $('search').oninput=()=>data&&renderConversations();
 function renderDemo(){const c=data.conversations.find(c=>c.phone==='244900000001');if(c)renderChat($('demo-chat'),c.messages);$('demo-form').hidden=!data.demo; if(!data.demo)$('demo-chat').replaceChildren(el('div','O laboratório está disponível apenas em DEMO_MODE. O atendimento real continua no WhatsApp.','empty'));if(c?.paused&&data.demo){const b=el('button','Reativar assistente de teste','outline');b.onclick=async()=>{try{await api('/api/conversations/244900000001/pause',{method:'POST',body:JSON.stringify({paused:false})});await refresh();}catch(e){$('notice').textContent=e.message;}};$('demo-chat').append(b);}}
 $('demo-form').onsubmit=async e=>{e.preventDefault();const text=$('demo-text').value.trim();if(!text)return;const button=e.target.querySelector('button');button.disabled=true;try{await api('/api/demo/message',{method:'POST',body:JSON.stringify({text})});$('demo-text').value='';await refresh();}catch(err){$('notice').textContent=err.message;}finally{button.disabled=false;}};
-$('suggestions').onclick=e=>{if(e.target.tagName==='BUTTON'){$('demo-text').value=e.target.textContent;$('demo-text').focus();}};
+$('suggestions').onclick=e=>{const button=e.target.closest('button');if(button){$('demo-text').value=button.dataset.prompt||button.textContent.replace('↗','').trim();$('demo-text').focus();}};
 let businessDirty=false, sectorTemplates=[], templatesPromise;
 const fields={name:'nome',sector:'setor',tone:'tom',extra:'extra'};
 const infoFields={contact:'contacto',address:'morada',hours:'horario',payment:'pagamento',delivery:'entrega',policies:'politicas'};
