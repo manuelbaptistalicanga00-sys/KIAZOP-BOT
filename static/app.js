@@ -25,10 +25,11 @@ async function refresh(){
  $('business-initials').textContent=data.business.nome.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
  $('mode').textContent=data.demo?'● Demonstração local':'● Modo produção';
  $('notice').textContent=data.demo?'Modo demonstração: dados deste ambiente, respostas locais e nenhum envio externo.':(data.stats.failed?`${data.stats.failed} mensagem(ns) com falha. `:'');
- if(data.stats.failed){const b=el('button','Reprocessar falhas','outline');b.onclick=async()=>{try{await api('/api/inbox/retry',{method:'POST'});$('notice').textContent='Reprocessamento solicitado. Atualize os dados dentro de instantes.';}catch(e){$('notice').textContent=e.message;}};$('notice').append(b);}
+ if(data.stats.failed){const b=el('button','Agendar falhas com rejeição conhecida','outline');b.onclick=async()=>{try{await api('/api/inbox/retry',{method:'POST'});$('notice').textContent='Reprocessamento solicitado. Atualize os dados dentro de instantes.';}catch(e){$('notice').textContent=e.message;}};$('notice').append(b);}
+ renderSafety();
  $('metrics').replaceChildren();
  [['Clientes atendidos',data.stats.clients,'Clientes únicos neste ambiente','♙'],['Mensagens',data.stats.messages,'Mensagens guardadas no histórico','☷'],['Solicitações',data.stats.bookings+data.stats.requests,'Pedidos a confirmar pela equipa','▦'],['Com a equipa',data.stats.paused,'Conversas com o bot em pausa','♧']].forEach(([label,note,desc,icon])=>{const card=el('div',undefined,'metric');const l=el('div',label,'metric-label');l.append(el('span',icon,'icon'));card.append(l,el('strong',String(note).padStart(2,'0')),el('small',desc));$('metrics').append(card);});
- $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.paused));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda está tudo tranquilo por aqui. Experimente o laboratório para iniciar a primeira conversa.','empty'));
+ $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.needs_human));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda está tudo tranquilo por aqui. Experimente o laboratório para iniciar a primeira conversa.','empty'));
  $('booking-rows').replaceChildren();
  const kindLabels={agendamento:'Agendamento',reserva:'Reserva',encomenda:'Encomenda',orcamento:'Orçamento'};
  const requests=[...data.requests,...data.bookings.map(b=>({...b,tipo:'agendamento',descricao:b.servico,preferencia:b.data_hora}))].sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
@@ -40,10 +41,23 @@ async function refresh(){
  renderConversations();renderDemo();
  }finally{$('refresh').disabled=false;}
 }
+function renderSafety(){
+ const warning=$('safety-alerts');warning.replaceChildren();
+ if(!data.demo&&!data.profile_ready)warning.append(el('p','Atendimento automático bloqueado: guarde um nome real e horário, catálogo ou contacto em O meu negócio.'));
+ for(const item of data.alerts||[])warning.append(el('p',item.detail));
+ if(data.stats.notifications_failed)warning.append(el('p',`${data.stats.notifications_failed} notificação(ões) à equipa falharam. Verifique a lista e assuma os atendimentos pendentes.`));
+ warning.hidden=!warning.childNodes.length;
+ const items=data.notifications||[];$('notification-panel').hidden=!items.length;
+ $('notification-summary').textContent=`Pendentes/em envio: ${data.stats.notifications_pending||0}. Falhadas: ${data.stats.notifications_failed||0}. Enviado significa aceite pelo fornecedor, não lido pela equipa.`;
+ $('notification-list').replaceChildren();
+ const labels={pending:'Pendente',sending:'Em envio',sent:'Enviada',failed:'Falhada'};
+ const errors={approved_template_required:'É necessário configurar um template aprovado fora da janela de 24 horas.',owner_not_configured:'Contacto da equipa não configurado.',delivery_unknown:'Entrega desconhecida; verificar antes de repetir.',provider_failure_or_unknown:'Falha do fornecedor ou resultado desconhecido; verificar antes de repetir.'};
+ for(const item of items){const li=el('li',`+${item.phone} — ${labels[item.status]||item.status}${item.error?' — '+(errors[item.error]||'Verifique a configuração e o fornecedor.'):''}`,item.status==='failed'?'needs-human':'');$('notification-list').append(li);}
+}
 function renderConversations(){
- $('conversation-list').replaceChildren();const filtered=data.conversations.filter(c=>c.phone.includes($('search').value.trim()));filtered.forEach(c=>{const b=el('button','+'+c.phone,'conversation-item'+(selected===c.phone?' selected':''));b.append(el('small',c.paused?'Atendimento humano':'Assistente ativo'));b.onclick=()=>{selected=c.phone;renderConversations();};$('conversation-list').append(b);});if(!filtered.length)$('conversation-list').append(el('div','Nenhuma conversa encontrada.','empty'));
+ $('conversation-list').replaceChildren();const filtered=data.conversations.filter(c=>c.phone.includes($('search').value.trim()));filtered.forEach(c=>{const b=el('button','+'+c.phone,'conversation-item'+(selected===c.phone?' selected':''));b.classList.toggle('needs-human',!!c.needs_human);b.append(el('small',c.needs_human?'Precisa de humano':'Assistente ativo'));b.onclick=()=>{selected=c.phone;renderConversations();};$('conversation-list').append(b);});if(!filtered.length)$('conversation-list').append(el('div','Nenhuma conversa encontrada.','empty'));
  const c=data.conversations.find(c=>c.phone===selected);if(!c)return;
- $('thread').replaceChildren();const heading=el('div',undefined,'panel-heading');heading.append(el('h3','+'+c.phone));const button=el('button',c.paused?'Reativar assistente':'Assumir conversa');button.onclick=async()=>{button.disabled=true;try{await api(`/api/conversations/${encodeURIComponent(c.phone)}/pause`,{method:'POST',body:JSON.stringify({paused:!c.paused})});await refresh();}catch(e){$('notice').textContent=e.message;}finally{button.disabled=false;}};heading.append(button);const chat=el('div',undefined,'chat');$('thread').append(heading,chat);renderChat(chat,c.messages);
+ $('thread').replaceChildren();const heading=el('div',undefined,'panel-heading');heading.append(el('h3','+'+c.phone));if(c.needs_human)heading.append(el('span','Precisa de humano','badge needs-human'));const button=el('button',c.paused?'Reativar assistente':'Assumir conversa');button.onclick=async()=>{button.disabled=true;try{await api(`/api/conversations/${encodeURIComponent(c.phone)}/pause`,{method:'POST',body:JSON.stringify({paused:!c.paused})});await refresh();}catch(e){$('notice').textContent=e.message;}finally{button.disabled=false;}};heading.append(button);const chat=el('div',undefined,'chat');$('thread').append(heading,chat);renderChat(chat,c.messages);
 }
 $('search').oninput=()=>data&&renderConversations();
 function renderDemo(){const c=data.conversations.find(c=>c.phone==='244900000001');if(c)renderChat($('demo-chat'),c.messages);$('demo-form').hidden=!data.demo; if(!data.demo)$('demo-chat').replaceChildren(el('div','O laboratório está disponível apenas em DEMO_MODE. O atendimento real continua no WhatsApp.','empty'));if(c?.paused&&data.demo){const b=el('button','Reativar assistente de teste','outline');b.onclick=async()=>{try{await api('/api/conversations/244900000001/pause',{method:'POST',body:JSON.stringify({paused:false})});await refresh();}catch(e){$('notice').textContent=e.message;}};$('demo-chat').append(b);}}
@@ -94,7 +108,7 @@ $('business-form').onsubmit=async e=>{
  Object.entries(infoFields).forEach(([id,key])=>profile.informacoes[key]=$('cfg-'+id).value.trim());
  Object.entries(dictionaryFields).forEach(([id,key])=>profile.informacoes[key]=parseDictionary($('cfg-'+id).value));
  operationFields.forEach(key=>profile.operacoes[key]=$('cfg-'+key).checked);
- await api('/api/business',{method:'PUT',body:JSON.stringify(profile)});businessDirty=false;await refresh();$('business-feedback').textContent='Negócio guardado. O assistente já usa estas informações.';
+ await api('/api/business',{method:'PUT',body:JSON.stringify(profile)});businessDirty=false;await refresh();$('business-feedback').textContent=data.profile_ready?'Negócio guardado. Perfil pronto para atendimento.':'Guardado, mas incompleto: preencha nome real e horário, catálogo ou contacto.';
  }catch(err){$('business-feedback').textContent=err.message;}finally{$('save-business').disabled=false;}
 };
 if(token)refresh().catch(e=>$('login-error').textContent=e.message);else showLogin();

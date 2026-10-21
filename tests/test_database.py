@@ -35,3 +35,15 @@ def test_vercel_requires_persistent_database(monkeypatch):
 def test_reject_unknown_database_protocol():
     with pytest.raises(ValueError, match='PostgreSQL'):
         Database('mysql://localhost/test')
+
+
+def test_exception_rolls_back_atomic_block(tmp_path):
+    db = Database(path=str(tmp_path / 'rollback.db'))
+    db.execute('CREATE TABLE test(value TEXT)')
+    with pytest.raises(RuntimeError):
+        with db:
+            db.execute('INSERT INTO test(value) VALUES(?)', ('never committed',))
+            raise RuntimeError('synthetic')
+    assert db.execute('SELECT * FROM test').fetchall() == []
+    assert not db.in_transaction
+    db.engine.dispose()

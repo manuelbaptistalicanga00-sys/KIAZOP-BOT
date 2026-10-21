@@ -14,7 +14,7 @@ AUTH = {'Authorization': 'Bearer test-admin'}
 
 def setup_function():
     with bot.lock:
-        for table in ('msgs', 'bookings', 'paused', 'seen', 'inbox', 'business_config', 'requests'):
+        for table in ('msgs', 'bookings', 'paused', 'seen', 'inbox', 'business_config', 'requests', 'jobs', 'conversation_leases', 'ingested', 'delivery_receipts', 'notifications', 'alerts', 'handoff_reasons', 'reconciliation_log'):
             bot.db.execute(f'DELETE FROM {table}')
         bot.db.commit()
 
@@ -67,20 +67,26 @@ def test_signature_and_duplicate(monkeypatch):
     assert client.post('/webhook', content=body).status_code == 403
     for _ in range(2):
         assert client.post('/webhook', content=body, headers=signed(body)).status_code == 200
-    assert len(calls) == 1
+    assert calls == []  # ACK durável, sem executar IA no processo HTTP
+    assert bot.db.execute("SELECT count(*) FROM jobs WHERE id='m1'").fetchone()[0] == 1
     assert client.post('/webhook', content=b'[]', headers=signed(b'[]')).status_code == 400
 
 
 def test_failed_message_can_retry(monkeypatch):
-    with bot.lock:
-        bot.db.execute("INSERT INTO inbox(id,payload) VALUES(?,?)", ('retry1', json.dumps({'from':'244900000001','type':'text','text':{'body':'Olá'}})))
-        bot.db.commit()
-    def fail(*args):
-        raise RuntimeError('test')
-    monkeypatch.setattr(bot, 'responder', fail)
+    import httpx
+    bot.queue.enqueue([{'id': 'retry1', 'from': '244900000001', 'type': 'text', 'text': {'body': 'Olá'}}])
+
+    def reject(*args):
+        response = httpx.Response(429, request=httpx.Request('POST', 'https://example.invalid'))
+        raise httpx.HTTPStatusError('synthetic rejection', request=response.request, response=response)
+
+    monkeypatch.setattr(bot, 'enviar', reject)
     bot.processar_pendentes()
     assert bot.db.execute("SELECT status FROM inbox").fetchone()[0] == 'failed'
-    monkeypatch.setattr(bot, 'responder', lambda *args: None)
+    assert client.post('/api/inbox/retry', headers=AUTH).status_code == 200
+    # API só agenda. Worker faz a tentativa e reutiliza resposta já preparada.
+    assert bot.db.execute("SELECT state FROM jobs").fetchone()[0] == 'pending'
+    monkeypatch.setattr(bot, 'enviar', lambda *args: 'synthetic-id')
     bot.processar_pendentes()
     assert bot.db.execute("SELECT status FROM inbox").fetchone()[0] == 'done'
 

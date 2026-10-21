@@ -4,6 +4,16 @@ Assistente multissetor WhatsApp Cloud API + Claude, com painel responsivo em por
 histórico de conversas, transferência para a equipa e solicitações de agendamento,
 reserva, encomenda e orçamento. Não é exclusivo para clínicas.
 
+## Estado deste lote: Fase 0 + B1–B3 (3.2.0)
+
+**Não aprovado para go-live.** Implementação local de inbox/worker, notificações
+persistentes e bloqueio por perfil. B4/B5 e fases 2–3 continuam pendentes;
+PostgreSQL/Neon e contratos Meta não foram testados com credenciais reais.
+Uma instalação dedicada por cliente; o enterprise-kit continua apenas referência.
+Consulte [estado e evidências](docs/pilot/ESTADO.md),
+[operação/rollback](docs/pilot/OPERACAO.md) e
+[checklist de go-live](docs/pilot/GO_LIVE.md).
+
 ## Executar sem credenciais (demonstração)
 
 ```bash
@@ -30,10 +40,12 @@ de dados de produção. Configure as informações reais em **O meu negócio**. 
 1. Defina `DEMO_MODE=false` e use uma base de dados exclusiva de produção.
 2. Preencha `ANTHROPIC_API_KEY`, `WA_TOKEN`, `WA_PHONE_ID`, `VERIFY_TOKEN`,
    `APP_SECRET`, `ADMIN_KEY` e, opcionalmente, `OWNER_PHONE`.
-3. Em **O meu negócio**, configure o nome, setor, catálogo, horários e operações. O perfil guardado na base de dados é aplicado a cada resposta.
+3. Em **O meu negócio**, guarde um nome real e pelo menos horário, catálogo ou contacto. Sem perfil guardado e validado, não há IA: há um único encaminhamento neutro e pausa por conversa.
 4. Publique em HTTPS e configure `https://SEU-DOMINIO/webhook` na Meta,
    usando o mesmo `VERIFY_TOKEN`. Subscreva o campo `messages`.
-5. Confirme o acesso ao modelo escolhido em `MODEL` e a versão Graph em
+5. Execute **um serviço worker sempre ligado**, separado da API: `python worker.py --concurrency 4`. A API Vercel sozinha não processa mensagens. Ambos usam a mesma `DATABASE_URL` pooled; para SQLite, o mesmo ficheiro persistente no mesmo host.
+6. Configure `OWNER_PHONE` e `OWNER_TEMPLATE_NAME` (alerta sem parâmetros aprovado na Meta); fora da janela de 24 h do dono não enviamos texto livre. Falhas exigem acompanhamento no painel.
+7. Confirme o acesso ao modelo escolhido em `MODEL` e a versão Graph em
    `WA_API_VERSION` antes de ativar o serviço.
 
 O webhook recusa mensagens sem assinatura HMAC válida e fica indisponível sem
@@ -48,7 +60,7 @@ configurado, não uma garantia de disponibilidade externa.
 - `/health`: saúde local da aplicação/base de dados (não testa fornecedores).
 - `GET /api/dashboard`: dados operacionais.
 - `POST /api/conversations/{telefone}/pause`: `{"paused": true}` ou `false`.
-- `POST /api/inbox/retry`: repetir mensagens pendentes/com falha.
+- `POST /api/inbox/retry`: agendar só falhas com rejeição conhecida; nunca reenviar envios incertos.
 - `POST /api/demo/message`: simulador, apenas no modo demo.
 
 As rotas `/api/*` exigem `Authorization: Bearer SUA_ADMIN_KEY`.
@@ -58,25 +70,27 @@ removidos por segurança. As ações que alteram dados agora usam POST.
 
 ## Robustez e limites operacionais
 
-- SQLite em WAL, índices e acesso serializado numa instância.
-- Webhook persiste mensagens numa inbox antes de responder à Meta; processamento
-  em segundo plano, deduplicação de IDs e repetição manual de falhas no painel.
-- Limite por cliente/hora, memória de 20 mensagens e timeout de fornecedores.
-- Erros de IA encaminham para humano; erros HTTP de envio não são ignorados.
-- Solicitações de marcação **não são reservas confirmadas**: a equipa deve
-  confirmar a disponibilidade. Dados estruturados são validados e deduplicados.
-- Áudios/imagens recebem um pedido para escrever em texto; não são transcritos.
+- Webhook valida HMAC e responde 200 **só após commit da inbox**. Sem IA/Meta
+  síncrona nem tarefas serverless em background; falha de persistência devolve 503.
+- Worker com concorrência entre conversas e lease renovável por conversa. Chamadas
+  externas fora de transacções; PostgreSQL usa `FOR UPDATE SKIP LOCKED`;
+  SQLite usa transacções curtas e mantém compatibilidade local.
+- IDs de mensagem deduplicados. Resposta preparada antes de enviar; rejeições
+  conhecidas têm até 3 tentativas, com espera; timeout/5xx/crash após início do
+  envio ficam **incertos, sem repetição automática**. Não prometemos exactly-once.
+- Receipts assinados com correlação podem finalizar registos sem reenviar. Sem
+  receipt, operador usa [reconciliação auditada](docs/pilot/OPERACAO.md).
+- Notificações à equipa em pending/sending/sent/failed; lista, contadores e aviso
+  vermelho no painel. `sent` significa aceite pela API, não lido pela equipa.
+- Sem perfil pronto em produção: não chama IA, encaminha uma vez e pausa. Guardar
+  perfil pronto liberta apenas pausas automáticas de perfil, não pausas manuais.
+- Limite por cliente/hora e histórico de 20 mensagens. Pedidos dependem de
+  confirmação pela equipa; imagens/áudios não são transcritos.
 
-Execute com **um único worker**. O processamento serializado é adequado a baixo
-volume; para escala, use uma fila dedicada e PostgreSQL. A inbox é persistente,
-mas o worker em segundo plano não é uma fila distribuída. Após uma interrupção,
-use “Reprocessar falhas”/`POST /api/inbox/retry` para pendentes e falhas.
-Não há garantia de envio exatamente uma vez se o processo terminar entre o envio
-à Meta e o commit local. Uma repetição pode registar novamente a mensagem recebida.
-Defina política de retenção, backups e acessos antes de armazenar dados pessoais;
-este projeto não implementa gestão de consentimento, perfis ou auditoria completa.
-Mensagens fora da janela de 24 horas exigem templates aprovados (não implementados).
-Custos de Meta e Anthropic são pagos pelo operador.
+**Limites restantes:** autenticação/rate limiting/CSP B4, retenção/encriptação B5,
+budget/diagnóstico/robustez de IA F2 e revisão enterprise F3. Templates só de
+alerta ao dono, não uma solução geral para mensagens de cliente fora da janela.
+Custos Meta/Anthropic são do operador. Não há alegação de conformidade ou SLA.
 
 ## Testes
 
@@ -87,13 +101,16 @@ ruff check . --select E9,F63,F7,F82
 ```
 
 O simulador terminal `python simular.py` também está disponível. Para respostas
-locais use `DEMO_MODE=true`; para Claude configure a chave Anthropic.
+locais use `DEMO_MODE=true`; para Claude configure a chave e um perfil guardado no painel.
+Os testes forçam base temporária/chaves vazias e bloqueiam sockets externos.
 
 ## Docker
 
 ```bash
 docker build -t kiazop .
 docker run --rm -p 8000:8000 --env-file .env -v kiazop-data:/data kiazop
+# Noutro serviço/processo, com a mesma configuração/volume:
+docker run --rm --env-file .env -v kiazop-data:/data kiazop python worker.py --concurrency 4
 ```
 
 Use um volume persistente em `/data`, proteja o painel com HTTPS e backups
