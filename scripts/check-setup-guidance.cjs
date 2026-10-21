@@ -1,0 +1,40 @@
+'use strict';
+// Apenas função de apresentação, sem rede, credenciais ou base de dados.
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs');
+const source = fs.readFileSync('static/app.js', 'utf8');
+const start = source.indexOf('function renderSetup()');
+assert.ok(start >= 0, 'Falta orientação dos estados de preparação');
+const end = source.indexOf('\nfunction renderSafety()', start);
+function element(tag, text = '', cls = '') {
+ return {tag, textContent:text, className:cls, children:[], append(...nodes){this.children.push(...nodes);}, replaceChildren(...nodes){this.children=nodes;}, focus(){this.focused=true;}};
+}
+const nodes = {'setup-status':element('section'), 'cfg-name':element('input')};
+let tab;
+const context = {data:{demo:true, profile_ready:false, worker_alive:false}, $:id=>nodes[id], el:element, switchTab:name=>{tab=name;}};
+vm.createContext(context);
+vm.runInContext(source.slice(start, end), context);
+const text = node => node.textContent+' '+node.children.map(text).join(' ');
+context.renderSetup();
+let output = text(nodes['setup-status']);
+assert.match(output, /Login confirmado nesta sessão/);
+assert.match(output, /Perfil por configurar/);
+assert.match(output, /Worker inactivo/);
+assert.match(output, /laboratório local/);
+const button = nodes['setup-status'].children.find(node=>node.tag==='button');
+button.onclick();
+assert.equal(tab, 'settings');
+assert.equal(nodes['cfg-name'].focused, true);
+context.data = {demo:false, profile_ready:true, worker_alive:true};
+context.renderSetup();
+output=text(nodes['setup-status']);
+assert.match(output, /Perfil guardado/);
+assert.match(output, /Worker activo/);
+assert.doesNotMatch(output, /laboratório local/);
+assert.doesNotMatch(output, /Perfil por configurar/);
+assert.equal(nodes['setup-status'].children.some(node=>node.tag==='button'), false);
+context.data.worker_alive=false;
+context.renderSetup();
+assert.match(text(nodes['setup-status']), /processamento automático não está pronto/);
+console.log('PASS: login, perfil pendente/pronto, worker demo/produção e acesso ao formulário');

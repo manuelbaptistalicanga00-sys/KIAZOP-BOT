@@ -24,3 +24,7 @@ input,textarea,select{border:1px solid #dfe5d8;background:#fafbf8;border-radius:
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .metric .icon svg{width:15px;height:15px}
+/* Estado de preparação: distinguir configuração pendente de falha operacional. */
+.setup-status{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:0 0 16px}.setup-status h2{font-size:16px;margin:0 0 10px;color:var(--ink)}.setup-status p{font-size:12px;line-height:1.7;color:#526257;margin:7px 0}.setup-status button{margin:8px 0}.operations-strip p{font-size:11px;color:#526257}
+/* Pesquisa global e filtros de atendimento, sem depender da página carregada. */
+.conversation-filters{display:grid;gap:9px;padding:18px;border-bottom:1px solid var(--line)}.conversation-filters label{font-size:12px;font-weight:650;color:var(--ink)}.conversation-filters input,.conversation-filters select{width:100%;min-width:0;padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font-size:12px}.filter-actions{display:flex;flex-wrap:wrap;gap:8px}.filter-actions button{font-size:11px;padding:9px 12px}.conversation-filters p{font-size:11px;margin:0;color:#526257}
