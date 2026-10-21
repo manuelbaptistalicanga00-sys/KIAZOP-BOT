@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from anthropic import Anthropic
@@ -506,7 +507,19 @@ async def receber(request: Request):
 
 
 @app.get("/api/dashboard", dependencies=[Depends(auth)])
-def dashboard(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), request_page: int = Query(1, ge=1)):
+def dashboard(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), request_page: int = Query(1, ge=1),
+              phone_query: str = Query('', max_length=30, pattern=r'^\+?[0-9 ]*$'),
+              conversation_state: Literal['all', 'human', 'assistant'] = 'all'):
+    phone_part = phone_query.replace(' ', '').lstrip('+')
+    # Só metadados: nunca pesquisar texto cifrado ou desencriptar todo o histórico.
+    clauses, params = [], []
+    if phone_part:
+        clauses.append('m.phone LIKE ?')
+        params.append('%' + phone_part + '%')
+    human = "(EXISTS (SELECT 1 FROM paused p WHERE p.phone=m.phone) OR EXISTS (SELECT 1 FROM notifications n WHERE n.phone=m.phone AND n.acknowledged_at IS NULL AND n.status IN ('failed','pending','sending')))"
+    if conversation_state != 'all':
+        clauses.append(human if conversation_state == 'human' else 'NOT ' + human)
+    where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
     with lock:
         bookings = [dict(zip(('id', 'phone', 'nome', 'servico', 'data_hora', 'ts'), r)) for r in db.execute("SELECT id,phone,nome,servico,data_hora,ts FROM bookings ORDER BY id DESC LIMIT ? OFFSET ?", (page_size, (request_page-1)*page_size))]
         requests = [dict(zip(('id', 'phone', 'tipo', 'nome', 'descricao', 'preferencia', 'ts'), r)) for r in db.execute("SELECT id,phone,tipo,nome,descricao,preferencia,ts FROM requests ORDER BY id DESC LIMIT ? OFFSET ?", (page_size, (request_page-1)*page_size))]
@@ -516,17 +529,25 @@ def dashboard(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=10
             UNION ALL SELECT id,'booking' AS source,phone,'agendamento' AS tipo,nome,servico AS descricao,data_hora AS preferencia,ts FROM bookings
             ORDER BY ts DESC,source,id DESC LIMIT ? OFFSET ?
         """, (page_size, (request_page-1)*page_size))]
-        conversations = []
-        for phone, in db.execute("SELECT phone FROM msgs GROUP BY phone ORDER BY max(id) DESC,phone LIMIT ? OFFSET ?", (page_size, (page-1)*page_size)).fetchall():
+        def read_conversation(phone):
             messages = db.execute("SELECT role,text,ts FROM msgs WHERE phone=? ORDER BY id DESC LIMIT 50", (phone,)).fetchall()[::-1]
-            conversations.append({"phone": phone, "paused": bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone()), "needs_human": notifications.needs_human(phone) or bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone()), "messages": [dict(zip(('role','text','ts'), r)) for r in messages]})
+            paused = bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone())
+            return {"phone": phone, "paused": paused, "needs_human": notifications.needs_human(phone) or paused,
+                    "messages": [dict(zip(('role','text','ts'), row)) for row in messages]}
+
+        conversations = []
+        conversation_total = db.execute('SELECT count(DISTINCT m.phone) FROM msgs m' + where, tuple(params)).fetchone()[0]
+        for phone, in db.execute('SELECT m.phone FROM msgs m' + where + ' GROUP BY m.phone ORDER BY max(m.id) DESC,m.phone LIMIT ? OFFSET ?', tuple(params) + (page_size, (page-1)*page_size)).fetchall():
+            conversations.append(read_conversation(phone))
+        demo_conversation = (next((c for c in conversations if c['phone'] == '244900000001'), None)
+                             or read_conversation('244900000001')) if DEMO else None
         stats = {"clients": db.execute("SELECT count(DISTINCT phone) FROM msgs").fetchone()[0], "messages": db.execute("SELECT count(*) FROM msgs").fetchone()[0], "paused": db.execute("SELECT count(*) FROM paused").fetchone()[0], "bookings": db.execute("SELECT count(*) FROM bookings").fetchone()[0], "requests": db.execute("SELECT count(*) FROM requests").fetchone()[0], "failed": db.execute("SELECT count(*) FROM inbox WHERE status='failed'").fetchone()[0],
                  "notifications_failed": db.execute("SELECT count(*) FROM notifications WHERE status='failed' AND acknowledged_at IS NULL").fetchone()[0],
                  "notifications_pending": db.execute("SELECT count(*) FROM notifications WHERE status IN ('pending','sending') AND acknowledged_at IS NULL").fetchone()[0]}
-    return {"business": negocio(), "demo": DEMO, "stats": stats, "conversations": conversations, "bookings": bookings, "requests": requests, "profile_ready": profile_ready(),
+    return {"business": negocio(), "demo": DEMO, "stats": stats, "conversations": conversations, "demo_conversation": demo_conversation, "bookings": bookings, "requests": requests, "profile_ready": profile_ready(),
             "notifications": notifications.list_recent(), "ai_budget": budget.status(),
             "solicitations": solicitations, **worker_health.status(),
-            "pagination": {"conversations": {"page": page, "page_size": page_size, "total": stats['clients']},
+            "pagination": {"conversations": {"page": page, "page_size": page_size, "total": conversation_total},
                            "solicitations": {"page": request_page, "page_size": page_size, "total": total_requests}},
             "alerts": [dict(zip(('code','phone','detail'), row)) for row in db.execute("SELECT code,phone,detail FROM alerts WHERE resolved=0")] }
 
