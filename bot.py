@@ -29,7 +29,7 @@ LIMITE_HORA = int(os.getenv("LIMITE_HORA", "30"))
 MODEL = os.getenv("MODEL", "claude-sonnet-4-5-20250929")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("kiazop")
-db = Database(os.getenv("DATABASE_URL"), DB_PATH)
+db = Database(os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL"), DB_PATH)
 lock = db
 if not db.postgres:
     db.execute("PRAGMA journal_mode=WAL")

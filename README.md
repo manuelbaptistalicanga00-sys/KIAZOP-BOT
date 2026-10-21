@@ -145,3 +145,7 @@ Interrupções entre envio e registo continuam a poder gerar respostas duplicada
 O pool tem até três ligações por instância; dimensione o limite do fornecedor
 para a concorrência prevista. Os testes locais validam SQLite e a tradução SQL;
 a ligação PostgreSQL real e o deploy devem ser validados com o ambiente conectado.
+
+Quando `DIRECT_URL` está definida, tem prioridade sobre `DATABASE_URL`. Isto permite
+manter a URL do pool fornecida pela integração e usar uma ligação direta para os locks
+de sessão. Configure estas variáveis no ambiente Production antes do deploy.
