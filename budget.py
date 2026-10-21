@@ -69,3 +69,31 @@ class Budget:
     def status(self):
         row = self.db.execute('SELECT spent FROM ai_budget WHERE day=?', (self.day(),)).fetchone()
         return {'day': self.day(), 'spent_micro_usd': row[0] if row else 0, 'limit_micro_usd': self.limit, 'estimated': True}
+
+    def call(self, estimated_cost, operation):
+        """Uma reserva por tentativa; só libertar quando não houve aceitação."""
+        import httpx
+        token = self.reserve(estimated_cost)
+        try:
+            response = operation()
+        except Exception as exc:
+            from ai_service import classify
+            category, _ = classify(exc)
+            status = getattr(exc, 'status_code', None) or getattr(getattr(exc, 'response', None), 'status_code', None)
+            cause = exc
+            connection_not_opened = False
+            for _ in range(8):
+                if isinstance(cause, httpx.ConnectError):
+                    connection_not_opened = True
+                    break
+                cause = getattr(cause, '__cause__', None)
+                if cause is None:
+                    break
+            if category != 'timeout' and ((status is not None and 400 <= status < 500 and status != 408) or connection_not_opened):
+                self.settle(token, 0)
+            # Timeouts, 5xx ou ligação interrompida após possível aceitação conservam reserva.
+            raise
+        usage = getattr(response, 'usage', None)
+        if usage is not None:
+            self.settle(token, self.cost(usage.input_tokens, usage.output_tokens))
+        return response

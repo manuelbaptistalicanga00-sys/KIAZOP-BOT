@@ -2,8 +2,23 @@
 import argparse
 import os
 import signal
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from threading import Event
+
+
+class Schedule:
+    def __init__(self):
+        self.next_maintenance = 0
+
+    def delay(self, has_work):
+        return 1 if has_work else 12
+
+    def maintenance_due(self, now):
+        if now < self.next_maintenance:
+            return False
+        self.next_maintenance = now + 180
+        return True
 
 
 def main():
@@ -28,10 +43,15 @@ def main():
         signal.signal(sig, lambda *_: stop.set())
     running = set()
     notification_task = None
-    with ThreadPoolExecutor(max_workers=args.concurrency) as pool, ThreadPoolExecutor(max_workers=1) as notify_pool:
+    schedule = Schedule()
+    with bot.worker_health.running(bot.log), ThreadPoolExecutor(max_workers=args.concurrency) as pool, ThreadPoolExecutor(max_workers=1) as notify_pool:
         while not stop.is_set():
-            bot.privacy.scheduled()
-            bot.maintenance(send_notifications=False)
+            started = time.monotonic()
+            if schedule.maintenance_due(started):
+                bot.privacy.scheduled()
+                bot.maintenance(send_notifications=False)
+            else:
+                bot.queue.reconcile(bot.finalize_job)
             # Alertas lentos à equipa não bloqueiam claims/IA de outras conversas.
             if notification_task is None or notification_task.done():
                 if notification_task is not None:
@@ -45,6 +65,7 @@ def main():
                 if job is None:
                     break
                 running.add(pool.submit(bot.process_job, job))
+            had_work = bool(running)
             if running:
                 done, running = wait(running, timeout=1, return_when=FIRST_COMPLETED)
                 for future in done:
@@ -54,10 +75,9 @@ def main():
                         bot.log.error('Falha no worker; lease permite recuperação segura')
             elif args.once:
                 break
-            else:
-                stop.wait(1)
+            stop.wait(max(0, schedule.delay(had_work) - (time.monotonic() - started)))
         # SIGTERM pára novos claims e deixa terminar os jobs em curso.
-    bot.maintenance()
+    bot.maintenance(send_notifications=False)
 
 
 if __name__ == '__main__':

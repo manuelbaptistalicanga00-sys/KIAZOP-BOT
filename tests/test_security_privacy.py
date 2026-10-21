@@ -45,8 +45,9 @@ def test_b4_login_ip_limit():
     client = TestClient(bot.app)
     for _ in range(5):
         assert client.get('/api/dashboard', headers={'Authorization': 'Bearer wrong'}).status_code == 401
-    response = client.get('/api/dashboard', headers=AUTH)
+    response = client.get('/api/dashboard', headers={'Authorization': 'Bearer wrong'})
     assert response.status_code == 429
+    assert client.get('/api/dashboard', headers=AUTH).status_code == 200
     assert int(response.headers['retry-after']) > 0
 
 

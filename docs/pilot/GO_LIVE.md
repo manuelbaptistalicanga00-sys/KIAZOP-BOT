@@ -1,5 +1,11 @@
 # Checklist de go-live — ainda NÃO aprovado
 
+Estado posterior: [piloto-staging](PILOTO_STAGING.md), a partir de 5eafe03.
+- [x] Arranque pré-DB, heartbeat/idade e alertas locais.
+- [x] Só falhas limitadas, notificações tratadas, reservas e failed receipts testados.
+- [x] Fluxo sintético: todas as colunas protegidas com prefixo enc:v1:.
+- [ ] Proxy/monitor/Neon/Meta/Claude e rollback reais continuam não verificados.
+
 Instalação/cliente: __________________  Ambiente: __________________
 Responsável técnico: _______________  Responsável do cliente: _______________
 Data prevista: _____________________  Revisão: _____________________________

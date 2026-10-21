@@ -16,17 +16,27 @@ class NotificationService:
               id TEXT PRIMARY KEY, source_id TEXT NOT NULL, phone TEXT NOT NULL, kind TEXT NOT NULL,
               owner_phone TEXT, status TEXT NOT NULL DEFAULT 'pending', error TEXT, outgoing_id TEXT,
               lease_owner TEXT, lease_until DOUBLE PRECISION DEFAULT 0, UNIQUE(source_id,kind))''')
+            from sqlalchemy import inspect
+            columns = {c['name'] for c in inspect(self.db.local.conn).get_columns('notifications')}
+            if 'acknowledged_at' not in columns:
+                self.db.execute('ALTER TABLE notifications ADD COLUMN acknowledged_at DOUBLE PRECISION')
 
     def schedule(self, source_id, phone, kind, owner_phone):
+        if not owner_phone or not owner_phone.strip():
+            return False
         self.db.execute('INSERT OR IGNORE INTO notifications(id,source_id,phone,kind,owner_phone) VALUES(?,?,?,?,?)',
                         (secrets.token_hex(16), source_id, phone, kind, owner_phone))
 
     def needs_human(self, phone):
-        return bool(self.db.execute("SELECT 1 FROM notifications WHERE phone=? AND status IN ('failed','pending','sending')", (phone,)).fetchone())
+        return bool(self.db.execute("SELECT 1 FROM notifications WHERE phone=? AND acknowledged_at IS NULL AND status IN ('failed','pending','sending')", (phone,)).fetchone())
 
     def list_recent(self):
-        return [dict(zip(('id', 'phone', 'kind', 'status', 'error'), row)) for row in self.db.execute(
-            'SELECT id,phone,kind,status,error FROM notifications ORDER BY id DESC LIMIT 100')]
+        return [dict(zip(('id', 'phone', 'kind', 'status', 'error', 'acknowledged_at'), row)) for row in self.db.execute(
+            'SELECT id,phone,kind,status,error,acknowledged_at FROM notifications ORDER BY id DESC LIMIT 100')]
+
+    def acknowledge(self, notification_id=None, phone=None):
+        clause, value = ('id', notification_id) if notification_id is not None else ('phone', phone)
+        return self.db.execute(f'UPDATE notifications SET acknowledged_at=? WHERE {clause}=? AND acknowledged_at IS NULL', (time.time(), value)).rowcount
 
     def _send(self, notification, owner_phone, demo, send_text):
         if not owner_phone:
@@ -58,7 +68,7 @@ class NotificationService:
             owner, now = secrets.token_hex(16), time.time()
             with self.db:
                 self.db.execute("UPDATE notifications SET status='failed',error='delivery_unknown' WHERE status='sending' AND lease_until<=?", (now,))
-                sql = "SELECT id FROM notifications WHERE status='pending' ORDER BY id LIMIT 1"
+                sql = "SELECT id FROM notifications WHERE status='pending' AND acknowledged_at IS NULL ORDER BY id LIMIT 1"
                 if self.db.postgres:
                     sql += ' FOR UPDATE SKIP LOCKED'
                 row = self.db.execute(sql).fetchone()

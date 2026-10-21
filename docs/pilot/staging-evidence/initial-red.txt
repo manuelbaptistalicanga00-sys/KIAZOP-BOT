@@ -1,0 +1,257 @@
+FFFFFFFFFFFFFFF.F..FFF.                                                  [100%]
+=================================== FAILURES ===================================
+_________________ test_s1_required_configuration[DATABASE_URL] _________________
+
+missing = 'DATABASE_URL'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+___________ test_s1_required_configuration[MESSAGE_ENCRYPTION_KEYS] ____________
+
+missing = 'MESSAGE_ENCRYPTION_KEYS'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+__________________ test_s1_required_configuration[ADMIN_KEY] ___________________
+
+missing = 'ADMIN_KEY'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+__________________ test_s1_required_configuration[APP_SECRET] __________________
+
+missing = 'APP_SECRET'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+_________________ test_s1_required_configuration[VERIFY_TOKEN] _________________
+
+missing = 'VERIFY_TOKEN'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+___________________ test_s1_required_configuration[WA_TOKEN] ___________________
+
+missing = 'WA_TOKEN'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+_________________ test_s1_required_configuration[WA_PHONE_ID] __________________
+
+missing = 'WA_PHONE_ID'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+______________ test_s1_required_configuration[ANTHROPIC_API_KEY] _______________
+
+missing = 'ANTHROPIC_API_KEY'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+____________________ test_s1_required_configuration[MODEL] _____________________
+
+missing = 'MODEL'
+
+    @pytest.mark.parametrize('missing',['DATABASE_URL','MESSAGE_ENCRYPTION_KEYS','ADMIN_KEY','APP_SECRET','VERIFY_TOKEN','WA_TOKEN','WA_PHONE_ID','ANTHROPIC_API_KEY','MODEL'])
+    def test_s1_required_configuration(missing):
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:34: ModuleNotFoundError
+_________________________ test_s1_sqlite_explicit_only _________________________
+
+    def test_s1_sqlite_explicit_only():
+>       from settings import validate_startup
+E       ModuleNotFoundError: No module named 'settings'
+
+tests/test_staging.py:43: ModuleNotFoundError
+____________________ test_s2_heartbeat_health_and_queue_age ____________________
+
+    def test_s2_heartbeat_health_and_queue_age():
+        client=TestClient(bot.app)
+>       assert client.get('/health').json()['worker_alive'] is False
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'worker_alive'
+
+tests/test_staging.py:54: KeyError
+______________________ test_s3_login_valid_never_blocked _______________________
+
+    def test_s3_login_valid_never_blocked():
+        client=TestClient(bot.app)
+        for _ in range(5):
+            assert client.get('/api/dashboard',headers={'Authorization':'Bearer wrong'}).status_code==401
+        assert client.get('/api/dashboard',headers={'Authorization':'Bearer wrong'}).status_code==429
+>       assert client.get('/api/dashboard',headers=AUTH).status_code==200
+E       AssertionError: assert 429 == 200
+E        +  where 429 = <Response [429 Too Many Requests]>.status_code
+E        +    where <Response [429 Too Many Requests]> = get('/api/dashboard', headers={'Authorization': 'Bearer test-admin'})
+E        +      where get = <starlette.testclient.TestClient object at 0x7f25f252b3d0>.get
+
+tests/test_staging.py:73: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=401
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=401
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=401
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=401
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=401
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=429
+WARNING  kiazop:bot.py:389 Admin authentication rejected status=429
+___________________ test_s3_valid_webhooks_not_rate_limited ____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f25f2474190>
+
+    def test_s3_valid_webhooks_not_rate_limited(monkeypatch):
+        monkeypatch.setattr(bot,'DEMO',False)
+        monkeypatch.setattr(bot,'APP_SECRET','synthetic')
+        monkeypatch.setenv('WEBHOOK_RATE_PER_MINUTE','2')
+        client=TestClient(bot.app)
+        for _ in range(3):
+            client.post('/webhook',content=b'{}')
+        raw=json.dumps({'entry':[{'changes':[{'value':{'messages':[message()]}}]}]}).encode()
+        signature='sha256='+hmac.new(b'synthetic',raw,hashlib.sha256).hexdigest()
+        for _ in range(3):
+>           assert client.post('/webhook',content=raw,headers={'x-hub-signature-256':signature}).status_code==200
+E           assert 429 == 200
+E            +  where 429 = <Response [429 Too Many Requests]>.status_code
+E            +    where <Response [429 Too Many Requests]> = post('/webhook', content=b'{"entry": [{"changes": [{"value": {"messages": [{"id": "staging-1", "from": "244900000001", "type": "text", "text": {"body": "Ol\\u00e1"}}]}}]}]}', headers={'x-hub-signature-256': 'sha256=b492f662bfc15c02d6f5cf007bc704a1dc2b2eae40727fdbabf74e7c97ddb2b7'})
+E            +      where post = <starlette.testclient.TestClient object at 0x7f25f2474350>.post
+
+tests/test_staging.py:86: AssertionError
+_______________________ test_s4_no_owner_no_notification _______________________
+
+    def test_s4_no_owner_no_notification():
+        bot.responder('244900000001','Quero um humano')
+>       assert bot.db.execute('SELECT count(*) FROM notifications').fetchone()[0]==0
+E       assert 1 == 0
+
+tests/test_staging.py:91: AssertionError
+___________________ test_s4_ack_and_resume_clear_needs_human ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f25f2357fd0>
+
+    def test_s4_ack_and_resume_clear_needs_human(monkeypatch):
+        monkeypatch.setattr(bot,'OWNER_PHONE','244900000099')
+        monkeypatch.setattr(bot,'enviar',lambda *args:'synthetic')
+        bot.responder('244900000001','Quero um humano')
+        bot.db.execute("UPDATE notifications SET status='failed'")
+        client=TestClient(bot.app)
+        mid=bot.db.execute('SELECT id FROM notifications').fetchone()[0]
+>       assert client.post(f'/api/notifications/{mid}/ack',headers=AUTH).status_code==200
+E       AssertionError: assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+E        +    where <Response [404 Not Found]> = post('/api/notifications/db93e51addc2714382b73950e830bf9c/ack', headers={'Authorization': 'Bearer test-admin'})
+E        +      where post = <starlette.testclient.TestClient object at 0x7f25f2356e50>.post
+
+tests/test_staging.py:101: AssertionError
+________________ test_s5_budget_rejection_release[error1-False] ________________
+
+error = ReadTimeout('synthetic'), release = False
+
+    @pytest.mark.parametrize('error,release',[(httpx.ConnectError('synthetic'),True),(httpx.ReadTimeout('synthetic'),False),(401,True),(429,True)])
+    def test_s5_budget_rejection_release(error,release):
+        from budget import Budget
+        budget=Budget(bot.db,lambda _:None,limit_micro=100)
+        def operation():
+            if isinstance(error,int):
+                response=httpx.Response(error,request=httpx.Request('POST','https://synthetic.invalid'))
+                raise httpx.HTTPStatusError('synthetic',request=response.request,response=response)
+            raise error
+        with pytest.raises(Exception):
+            budget.call(50,operation)
+>       assert budget.status()['spent_micro_usd']==(0 if release else 50)
+E       assert 0 == 50
+
+tests/test_staging.py:118: AssertionError
+_________________________ test_s6_failed_receipt_alert _________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f25f252aa10>
+
+    def test_s6_failed_receipt_alert(monkeypatch):
+        monkeypatch.setattr(bot,'DEMO',False)
+        monkeypatch.setattr(bot,'APP_SECRET','synthetic')
+        bot.queue.enqueue([message()])
+        raw=json.dumps({'entry':[{'changes':[{'value':{'statuses':[{'id':'out','recipient_id':'244900000001','status':'failed','biz_opaque_callback_data':'job:staging-1','errors':[{'code':131026,'message':'Do not persist provider text'}]}]}}]}]}).encode()
+        signature='sha256='+hmac.new(b'synthetic',raw,hashlib.sha256).hexdigest()
+        client=TestClient(bot.app)
+        assert client.post('/webhook',content=raw,headers={'x-hub-signature-256':signature}).status_code==200
+        data=client.get('/api/dashboard',headers=AUTH).json()
+>       assert any(alert['code']=='meta_delivery_failed' for alert in data['alerts'])
+E       assert False
+E        +  where False = any(<generator object test_s6_failed_receipt_alert.<locals>.<genexpr> at 0x7f25f2b475e0>)
+
+tests/test_staging.py:130: AssertionError
+__________________________ test_s7_adaptive_schedule ___________________________
+
+    def test_s7_adaptive_schedule():
+>       from worker import Schedule
+E       ImportError: cannot import name 'Schedule' from 'worker' (/home/user/KIAZOP-BOT/worker.py)
+
+tests/test_staging.py:134: ImportError
+________________________ test_s8_readme_deployment_plan ________________________
+
+    def test_s8_readme_deployment_plan():
+        from pathlib import Path
+        text=Path('README.md').read_text()
+>       assert '## Piloto em 60 minutos' in text
+E       AssertionError: assert '## Piloto em 60 minutos' in '# KIAZOP · Central de atendimento inteligente\n\nAssistente multissetor WhatsApp Cloud API + Claude, com painel respo...o é uma migração automática nem um\nSaaS enterprise de produção completo. Ver bloqueadores de go-live no seu README.\n'
+
+tests/test_staging.py:146: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/user/KIAZOP-BOT/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_staging.py::test_s1_required_configuration[DATABASE_URL] - ...
+FAILED tests/test_staging.py::test_s1_required_configuration[MESSAGE_ENCRYPTION_KEYS]
+FAILED tests/test_staging.py::test_s1_required_configuration[ADMIN_KEY] - Mod...
+FAILED tests/test_staging.py::test_s1_required_configuration[APP_SECRET] - Mo...
+FAILED tests/test_staging.py::test_s1_required_configuration[VERIFY_TOKEN] - ...
+FAILED tests/test_staging.py::test_s1_required_configuration[WA_TOKEN] - Modu...
+FAILED tests/test_staging.py::test_s1_required_configuration[WA_PHONE_ID] - M...
+FAILED tests/test_staging.py::test_s1_required_configuration[ANTHROPIC_API_KEY]
+FAILED tests/test_staging.py::test_s1_required_configuration[MODEL] - ModuleN...
+FAILED tests/test_staging.py::test_s1_sqlite_explicit_only - ModuleNotFoundEr...
+FAILED tests/test_staging.py::test_s2_heartbeat_health_and_queue_age - KeyErr...
+FAILED tests/test_staging.py::test_s3_login_valid_never_blocked - AssertionEr...
+FAILED tests/test_staging.py::test_s3_valid_webhooks_not_rate_limited - asser...
+FAILED tests/test_staging.py::test_s4_no_owner_no_notification - assert 1 == 0
+FAILED tests/test_staging.py::test_s4_ack_and_resume_clear_needs_human - Asse...
+FAILED tests/test_staging.py::test_s5_budget_rejection_release[error1-False]
+FAILED tests/test_staging.py::test_s6_failed_receipt_alert - assert False
+FAILED tests/test_staging.py::test_s7_adaptive_schedule - ImportError: cannot...
+FAILED tests/test_staging.py::test_s8_readme_deployment_plan - AssertionError...
+19 failed, 4 passed, 1 warning in 1.36s

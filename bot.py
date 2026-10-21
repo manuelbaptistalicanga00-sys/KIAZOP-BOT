@@ -24,6 +24,8 @@ from privacy import Privacy, Vault
 from ai_service import validate_model, classify, retry_call
 from actions import parse_response
 from budget import Budget, BudgetExceeded
+from settings import validate_startup
+from worker_health import WorkerHealth
 import uuid
 
 load_dotenv()
@@ -35,12 +37,11 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
 OWNER_PHONE = os.getenv("OWNER_PHONE", "")
 DB_PATH = os.getenv("DB_PATH", "bot.db")
 LIMITE_HORA = int(os.getenv("LIMITE_HORA", "30"))
-MODEL = os.getenv("MODEL", "claude-sonnet-4-5-20250929")
+MODEL = os.getenv("MODEL", "claude-sonnet-4-5-20250929" if DEMO else "")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("kiazop")
 logging.getLogger("uvicorn.access").addFilter(RedactAccess())
-validate_model(MODEL)
-validate_admin(DEMO, ADMIN_KEY)
+validate_startup(DEMO, os.environ)
 db = Database(os.getenv("DATABASE_URL"), DB_PATH)
 keys = [key.strip() for key in os.getenv('MESSAGE_ENCRYPTION_KEYS', '').split(',') if key.strip()]
 if keys:
@@ -68,6 +69,7 @@ with lock:
 
 queue = JobQueue(db, lease_seconds=int(os.getenv("WORKER_LEASE_SECONDS", "300")))
 queue.initialize()
+worker_health = WorkerHealth(db)
 notifications = NotificationService(db)
 notifications.initialize()
 privacy = Privacy(db, gate.key)
@@ -239,12 +241,7 @@ def build_reply(job):
                 # Cada retry reserva separadamente. Falha/crash mantém reserva conservadora.
                 def operation():
                     estimate = budget.cost(len((prompt + json.dumps(history, ensure_ascii=False)).encode('utf-8')) + 4096, 600)
-                    reservation = budget.reserve(estimate)
-                    response = client.messages.create(model=MODEL, max_tokens=600, system=prompt, messages=history)
-                    usage = getattr(response, 'usage', None)
-                    if usage is not None:
-                        budget.settle(reservation, budget.cost(usage.input_tokens, usage.output_tokens))
-                    return response
+                    return budget.call(estimate, lambda: client.messages.create(model=MODEL, max_tokens=600, system=prompt, messages=history))
                 r = retry_call(operation)
             bruto = "\n".join(b.text for b in r.content if b.type == 'text')
     except Exception as exc:
@@ -338,6 +335,24 @@ def process_job(job):
                 require_review(job)
 
 
+def record_delivery_failures(statuses):
+    for status in statuses:
+        if status.get('status') != 'failed':
+            continue
+        receipt = db.execute("SELECT job_id,phone FROM delivery_receipts WHERE outgoing_id=? AND status='failed'", (status.get('id'),)).fetchone()
+        if receipt:
+            phone = receipt[1]
+            alert('meta_delivery_failed', phone, 'A Meta comunicou falha na entrega. Verifique e assuma o atendimento; não há reenvio automático.')
+            handoff(phone, 'meta_delivery_failed')
+        else:
+            notice = db.execute('SELECT id,phone FROM notifications WHERE outgoing_id=? AND owner_phone=?', (status.get('id'),status.get('recipient_id'))).fetchone()
+            if notice:
+                db.execute("UPDATE notifications SET status='failed',error='meta_delivery_failed' WHERE id=?", (notice[0],))
+                alert('meta_delivery_failed', notice[1], 'Falha de entrega da notificação à equipa comunicada pela Meta.')
+            else:
+                alert('meta_delivery_failed', '*', 'Recebida falha Meta sem correlação local. Rever no fornecedor sem repetir automaticamente.')
+
+
 def require_review(job):
     with db:
         current = queue._get(job['id'], for_update=True)
@@ -406,7 +421,7 @@ def save_business(body: BusinessProfile):
             db.execute("DELETE FROM handoff_reasons WHERE reason='profile_unready'")
             db.execute("UPDATE alerts SET resolved=1 WHERE code='profile_unready'")
         db.commit()
-    return {"ok": True, "business": body.model_dump(), "profile_ready": profile_ready()}
+    return {"ok": True, "business": body.model_dump(), "profile_ready": profile_ready(), **worker_health.status()}
 
 
 @app.middleware("http")
@@ -414,7 +429,6 @@ async def headers(request, call_next):
     response = None
     if request.url.path == '/webhook' and request.method == 'POST':
         try:
-            gate.hit('webhook', request.client.host if request.client else 'unknown', int(os.getenv('WEBHOOK_RATE_PER_MINUTE', '120')), 60)
             length = request.headers.get('content-length')
             if length and (not length.isdigit() or int(length) > 1_000_000):
                 raise HTTPException(413, 'Payload demasiado grande')
@@ -441,7 +455,7 @@ def painel():
 def health():
     with lock:
         db.execute("SELECT 1").fetchone()
-    return {"status": "ok", "mode": "demo" if DEMO else "production", "version": "3.2.0", "profile_ready": profile_ready()}
+    return {"status": "ok", "mode": "demo" if DEMO else "production", "version": "3.2.0", "profile_ready": profile_ready(), **worker_health.status()}
 
 
 @app.get("/webhook")
@@ -464,6 +478,8 @@ async def receber(request: Request):
     raw = bytes(raw)
     signature = "sha256=" + hmac.new(APP_SECRET.encode(), raw, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature.encode("utf-8"), request.headers.get("x-hub-signature-256", "").encode("utf-8")):
+        from starlette.concurrency import run_in_threadpool
+        await run_in_threadpool(gate.hit, 'webhook_failed', request.client.host if request.client else 'unknown', int(os.getenv('WEBHOOK_RATE_PER_MINUTE', '120')), 60)
         raise HTTPException(403, "Assinatura inválida")
     try:
         body = json.loads(raw)
@@ -481,6 +497,7 @@ async def receber(request: Request):
             with db:
                 queue.enqueue(messages)
                 queue.receipts(statuses)
+                record_delivery_failures(statuses)
         await run_in_threadpool(persist)
     except Exception:
         log.error('Falha a persistir webhook; pedir reenvio')
@@ -504,11 +521,11 @@ def dashboard(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=10
             messages = db.execute("SELECT role,text,ts FROM msgs WHERE phone=? ORDER BY id DESC LIMIT 50", (phone,)).fetchall()[::-1]
             conversations.append({"phone": phone, "paused": bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone()), "needs_human": notifications.needs_human(phone) or bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone()), "messages": [dict(zip(('role','text','ts'), r)) for r in messages]})
         stats = {"clients": db.execute("SELECT count(DISTINCT phone) FROM msgs").fetchone()[0], "messages": db.execute("SELECT count(*) FROM msgs").fetchone()[0], "paused": db.execute("SELECT count(*) FROM paused").fetchone()[0], "bookings": db.execute("SELECT count(*) FROM bookings").fetchone()[0], "requests": db.execute("SELECT count(*) FROM requests").fetchone()[0], "failed": db.execute("SELECT count(*) FROM inbox WHERE status='failed'").fetchone()[0],
-                 "notifications_failed": db.execute("SELECT count(*) FROM notifications WHERE status='failed'").fetchone()[0],
-                 "notifications_pending": db.execute("SELECT count(*) FROM notifications WHERE status IN ('pending','sending')").fetchone()[0]}
+                 "notifications_failed": db.execute("SELECT count(*) FROM notifications WHERE status='failed' AND acknowledged_at IS NULL").fetchone()[0],
+                 "notifications_pending": db.execute("SELECT count(*) FROM notifications WHERE status IN ('pending','sending') AND acknowledged_at IS NULL").fetchone()[0]}
     return {"business": negocio(), "demo": DEMO, "stats": stats, "conversations": conversations, "bookings": bookings, "requests": requests, "profile_ready": profile_ready(),
             "notifications": notifications.list_recent(), "ai_budget": budget.status(),
-            "solicitations": solicitations,
+            "solicitations": solicitations, **worker_health.status(),
             "pagination": {"conversations": {"page": page, "page_size": page_size, "total": stats['clients']},
                            "solicitations": {"page": request_page, "page_size": page_size, "total": total_requests}},
             "alerts": [dict(zip(('code','phone','detail'), row)) for row in db.execute("SELECT code,phone,detail FROM alerts WHERE resolved=0")] }
@@ -526,6 +543,7 @@ def pause(phone: str, body: Pause):
         else:
             db.execute("DELETE FROM paused WHERE phone=?", (phone,))
             db.execute("DELETE FROM handoff_reasons WHERE phone=?", (phone,))
+            notifications.acknowledge(phone=phone)
         db.commit()
     return {"ok": True}
 
@@ -590,3 +608,12 @@ def conversation_messages(phone: str, page: int = Query(1, ge=1), page_size: int
         rows = db.execute('SELECT id,role,text,ts FROM msgs WHERE phone=? ORDER BY id DESC LIMIT ? OFFSET ?',
                           (phone, page_size, (page-1)*page_size)).fetchall()[::-1]
     return {'messages': [dict(zip(('id','role','text','ts'), row)) for row in rows], 'page': page, 'page_size': page_size, 'total': total}
+
+
+@app.post('/api/notifications/{notification_id}/ack', dependencies=[Depends(auth)])
+def acknowledge_notification(notification_id: str):
+    with db:
+        if not db.execute('SELECT 1 FROM notifications WHERE id=?',(notification_id,)).fetchone():
+            raise HTTPException(404, 'Notificação não encontrada')
+        notifications.acknowledge(notification_id=notification_id)
+    return {'ok': True}

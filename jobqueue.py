@@ -160,19 +160,21 @@ class JobQueue:
         with self.db:
             for status in statuses:
                 mid = status.get('biz_opaque_callback_data')
-                if not isinstance(mid, str) or not mid.startswith('job:'):
-                    continue
-                job = self._get(mid[4:])
+                if isinstance(mid, str) and mid.startswith('job:'):
+                    job = self._get(mid[4:])
+                else:
+                    row = self.db.execute('SELECT id FROM jobs WHERE outgoing_id=?', (status.get('id'),)).fetchone()
+                    job = self._get(row[0]) if row else None
                 if not job or status.get('recipient_id') != job['phone']:
                     continue
                 outgoing_id, state = status.get('id'), status.get('status')
-                if isinstance(outgoing_id, str) and state in ('sent', 'delivered', 'read'):
+                if isinstance(outgoing_id, str) and state in ('sent', 'delivered', 'read', 'failed'):
                     self.db.execute('INSERT OR IGNORE INTO delivery_receipts(event_key,job_id,outgoing_id,phone,status) VALUES(?,?,?,?,?)',
                                     (outgoing_id + ':' + state, job['id'], outgoing_id, job['phone'], state))
 
     def reconcile(self, finalize):
         with self.db:
-            rows = self.db.execute("SELECT j.id,r.outgoing_id FROM jobs j JOIN delivery_receipts r ON r.job_id=j.id WHERE j.state IN ('sending','uncertain')").fetchall()
+            rows = self.db.execute("SELECT j.id,r.outgoing_id FROM jobs j JOIN delivery_receipts r ON r.job_id=j.id WHERE j.state IN ('sending','uncertain') AND r.status IN ('sent','delivered','read')").fetchall()
             for mid, outgoing_id in rows:
                 self.finish(self._get(mid), finalize, outgoing_id, from_receipt=True)
         return len(rows)
