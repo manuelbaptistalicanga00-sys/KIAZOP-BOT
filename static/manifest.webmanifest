@@ -1,0 +1,16 @@
+{
+  "id": "/painel",
+  "name": "KIAZOP — Central de operações",
+  "short_name": "KIAZOP",
+  "description": "Central de atendimento dedicada ao seu negócio. Requer ligação à internet.",
+  "lang": "pt-AO",
+  "start_url": "/painel",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f3",
+  "theme_color": "#15221e",
+  "icons": [
+    {"src": "/static/icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/static/icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}

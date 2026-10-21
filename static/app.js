@@ -142,3 +142,8 @@ $('business-form').onsubmit=async e=>{
  }catch(err){$('business-feedback').textContent=err.message;}finally{$('save-business').disabled=false;}
 };
 if(token)refresh().catch(e=>$('login-error').textContent=e.message);else showLogin();
+
+// Instalação opcional; não bloqueia login se o navegador não suportar PWA.
+if(typeof navigator!=='undefined' && typeof window!=='undefined' && 'serviceWorker' in navigator && window.isSecureContext){
+ navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+}

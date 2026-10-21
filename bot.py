@@ -446,6 +446,11 @@ async def headers(request, call_next):
     return response
 
 
+@app.get('/service-worker.js', include_in_schema=False)
+def installation_worker():
+    return FileResponse(ROOT / 'static' / 'service-worker.js', media_type='application/javascript')
+
+
 @app.get("/")
 @app.get("/painel")
 def painel():
