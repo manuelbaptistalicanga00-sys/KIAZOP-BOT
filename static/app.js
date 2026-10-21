@@ -31,7 +31,7 @@ async function refresh(){
  $('mode').textContent=data.demo?'● Ambiente de demonstração':'● Modo produção';
  $('notice').textContent=data.demo?'Modo demonstração: dados deste ambiente, respostas locais e nenhum envio externo.':(data.stats.failed?`${data.stats.failed} mensagem(ns) com falha. `:'');
  if(data.stats.failed){const b=el('button','Agendar falhas com rejeição conhecida','outline');b.onclick=async()=>{try{await api('/api/inbox/retry',{method:'POST'});$('notice').textContent='Reprocessamento solicitado. Atualize os dados dentro de instantes.';}catch(e){$('notice').textContent=e.message;}};$('notice').append(b);}
- renderSafety();
+ renderSetup();renderSafety();
  $('metrics').replaceChildren();
  [['Clientes atendidos',data.stats.clients,'Clientes únicos neste ambiente','clients'],['Mensagens',data.stats.messages,'Mensagens guardadas no histórico','messages'],['Solicitações',data.stats.bookings+data.stats.requests,'Pedidos a confirmar pela equipa','requests'],['Com a equipa',data.stats.paused,'Conversas com o bot em pausa','paused']].forEach(([label,note,desc,icon])=>{const card=el('div',undefined,'metric');const l=el('div',label,'metric-label');const mark=el('span',undefined,'icon');mark.append(metricIcon(icon));l.append(mark);card.append(l,el('strong',String(note).padStart(2,'0')),el('small',desc));$('metrics').append(card);});
  $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.needs_human));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda não existem conversas neste ambiente. Inicie uma conversa no Laboratório para testar o atendimento.','empty'));
@@ -41,7 +41,7 @@ async function refresh(){
  requests.forEach(b=>{const tr=el('tr');[kindLabels[b.tipo]||b.tipo,b.nome,b.descricao,b.preferencia||'—','+'+b.phone,'A confirmar'].forEach(v=>tr.append(el('td',v)));$('booking-rows').append(tr);});
  if(!requests.length){const td=el('td','Sem solicitações por enquanto.');td.colSpan=6;const tr=el('tr');tr.append(td);$('booking-rows').append(tr);}
  if(!businessDirty)fillBusiness(data.business);
- if(!Object.keys(data.business.informacoes.produtos).length&&!Object.keys(data.business.informacoes.servicos).length){const b=el('button','Configurar o meu negócio','outline');b.onclick=()=>switchTab('settings');$('notice').append(document.createTextNode(' Configure os dados reais antes de atender clientes. '),b);}
+ if(!data.profile_ready){const b=el('button','Configurar o meu negócio','outline');b.onclick=()=>switchTab('settings');$('notice').append(document.createTextNode(' Configure os dados reais antes de atender clientes. '),b);}
 
  renderConversations();renderDemo();renderPagination();
  }finally{$('refresh').disabled=false;}
@@ -50,6 +50,16 @@ function renderPagination(){
  const setup=(id,meta,change)=>{let node=$(id);if(!node){node=el('div',undefined,'pagination');node.id=id;(id==='conversation-pager'?$('conversation-list').parentElement:$('booking-rows').closest('.panel')).append(node);}node.replaceChildren();const prev=el('button','Anterior'),next=el('button','Seguinte');prev.disabled=meta.page<=1;next.disabled=meta.page*meta.page_size>=meta.total;for(const [button,delta] of [[prev,-1],[next,1]])button.onclick=async()=>{button.disabled=true;try{await change(meta.page+delta);await refresh();}catch(error){$('notice').textContent=error.message;}finally{button.disabled=false;}};node.append(prev,el('span',`Página ${meta.page} · ${meta.total} registos`),next);};
  setup('conversation-pager',data.pagination.conversations,async p=>{conversationPage=p;selected=undefined;$('thread').replaceChildren(el('p','Seleccione uma conversa.'));});
  setup('request-pager',data.pagination.solicitations,async p=>{requestPage=p;});
+}
+function renderSetup(){
+ const setup=$('setup-status');setup.replaceChildren();
+ setup.append(el('h2','Preparação do atendimento'));
+ setup.append(el('p','Login confirmado nesta sessão — os dados protegidos do painel foram carregados.'));
+ setup.append(el('p',data.profile_ready?'Perfil guardado — confirme que os dados continuam correctos.':'Perfil por configurar — Guarde os dados reais do negócio: nome e horário, catálogo ou contacto.'));
+ setup.append(el('p',data.worker_alive?'Worker activo — batimento recente recebido.':`Worker inactivo — ${data.demo?'o laboratório local pode ser usado sem worker; o processamento da fila requer um serviço separado sempre ligado.':'o processamento automático não está pronto; é necessário iniciar o worker num serviço separado sempre ligado.'}`));
+ if(!data.profile_ready){const button=el('button','Preencher os dados do negócio','outline');button.type='button';button.onclick=()=>{switchTab('settings');$('cfg-name').focus();};setup.append(button);}
+ if(!data.worker_alive)setup.append(el('p','O Vercel aloja o painel/API, não o worker. O responsável técnico deve configurar o serviço com a mesma base PostgreSQL e confirmar o batimento antes de atender clientes.'));
+ if(data.demo)setup.append(el('p','Modo demo: isto não confirma envios reais para WhatsApp nem chamadas à IA.'));
 }
 function renderSafety(){
  const warning=$('safety-alerts');warning.replaceChildren();if(!data.worker_alive)warning.append(el('p','Alerta: worker sem batimento há mais de 60 segundos ou ainda não iniciado.'));if(data.oldest_pending_age_seconds>300)warning.append(el('p',`Alerta: mensagem por resolver há ${Math.floor(data.oldest_pending_age_seconds/60)} minutos.`));$('worker-status').textContent=`${data.worker_alive?'Worker activo':'Worker inactivo'} · Batimento: ${data.worker_heartbeat_age_seconds==null?'não recebido':data.worker_heartbeat_age_seconds+' s'} · Mais antiga por resolver: ${data.oldest_pending_age_seconds==null?'nenhuma':data.oldest_pending_age_seconds+' s'}`;

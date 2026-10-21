@@ -24,3 +24,5 @@ input,textarea,select{border:1px solid #dfe5d8;background:#fafbf8;border-radius:
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .metric .icon svg{width:15px;height:15px}
+/* Estado de preparação: distinguir configuração pendente de falha operacional. */
+.setup-status{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:0 0 16px}.setup-status h2{font-size:16px;margin:0 0 10px;color:var(--ink)}.setup-status p{font-size:12px;line-height:1.7;color:#526257;margin:7px 0}.setup-status button{margin:8px 0}.operations-strip p{font-size:11px;color:#526257}
