@@ -1,0 +1,120 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+________ test_strict_tags_reject_invalid[Pedido [HUMANO] texto depois] _________
+
+raw = 'Pedido [HUMANO] texto depois'
+
+    @pytest.mark.parametrize('raw', [
+        'Pedido [HUMANO] texto depois', 'Pedido [HUMANO][HUMANO]',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}',
+        'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}',
+        'Pedido [OUTRA_TAG] privado',
+    ])
+    def test_strict_tags_reject_invalid(raw):
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:89: ModuleNotFoundError
+___________ test_strict_tags_reject_invalid[Pedido [HUMANO][HUMANO]] ___________
+
+raw = 'Pedido [HUMANO][HUMANO]'
+
+    @pytest.mark.parametrize('raw', [
+        'Pedido [HUMANO] texto depois', 'Pedido [HUMANO][HUMANO]',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}',
+        'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}',
+        'Pedido [OUTRA_TAG] privado',
+    ])
+    def test_strict_tags_reject_invalid(raw):
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:89: ModuleNotFoundError
+_ test_strict_tags_reject_invalid[Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}] _
+
+raw = 'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}'
+
+    @pytest.mark.parametrize('raw', [
+        'Pedido [HUMANO] texto depois', 'Pedido [HUMANO][HUMANO]',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}',
+        'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}',
+        'Pedido [OUTRA_TAG] privado',
+    ])
+    def test_strict_tags_reject_invalid(raw):
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:89: ModuleNotFoundError
+_ test_strict_tags_reject_invalid[Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanh\xe3"}] _
+
+raw = 'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}'
+
+    @pytest.mark.parametrize('raw', [
+        'Pedido [HUMANO] texto depois', 'Pedido [HUMANO][HUMANO]',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}',
+        'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}',
+        'Pedido [OUTRA_TAG] privado',
+    ])
+    def test_strict_tags_reject_invalid(raw):
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:89: ModuleNotFoundError
+_ test_strict_tags_reject_invalid[Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}] _
+
+raw = 'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}'
+
+    @pytest.mark.parametrize('raw', [
+        'Pedido [HUMANO] texto depois', 'Pedido [HUMANO][HUMANO]',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}',
+        'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}',
+        'Pedido [OUTRA_TAG] privado',
+    ])
+    def test_strict_tags_reject_invalid(raw):
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:89: ModuleNotFoundError
+_________ test_strict_tags_reject_invalid[Pedido [OUTRA_TAG] privado] __________
+
+raw = 'Pedido [OUTRA_TAG] privado'
+
+    @pytest.mark.parametrize('raw', [
+        'Pedido [HUMANO] texto depois', 'Pedido [HUMANO][HUMANO]',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}',
+        'Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanhã"}',
+        'Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}',
+        'Pedido [OUTRA_TAG] privado',
+    ])
+    def test_strict_tags_reject_invalid(raw):
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:89: ModuleNotFoundError
+_____________________ test_strict_tags_valid_and_disabled ______________________
+
+    def test_strict_tags_valid_and_disabled():
+>       from actions import parse_response
+E       ModuleNotFoundError: No module named 'actions'
+
+tests/test_phase2.py:98: ModuleNotFoundError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/user/KIAZOP-BOT/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_phase2.py::test_strict_tags_reject_invalid[Pedido [HUMANO] texto depois]
+FAILED tests/test_phase2.py::test_strict_tags_reject_invalid[Pedido [HUMANO][HUMANO]]
+FAILED tests/test_phase2.py::test_strict_tags_reject_invalid[Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","descricao":"Camisa","extra":"bad"}]
+FAILED tests/test_phase2.py::test_strict_tags_reject_invalid[Pedido [AGENDAMENTO]{"nome":2,"servico":"Corte","data_hora":"Amanh\xe3"}]
+FAILED tests/test_phase2.py::test_strict_tags_reject_invalid[Pedido [SOLICITACAO]{"tipo":"encomenda","nome":"Ana","nome":"Outra","descricao":"Camisa"}]
+FAILED tests/test_phase2.py::test_strict_tags_reject_invalid[Pedido [OUTRA_TAG] privado]
+FAILED tests/test_phase2.py::test_strict_tags_valid_and_disabled - ModuleNotF...
+7 failed, 11 deselected, 1 warning in 0.93s

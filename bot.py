@@ -12,13 +12,18 @@ import httpx
 from anthropic import Anthropic
 from database import Database
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from business import BusinessProfile, KINDS, LABELS, normalize, templates
 from jobqueue import JobQueue, LeaseLost
 from notifications import NotificationService
+from security import Gate, validate_admin, RedactAccess
+from privacy import Privacy, Vault
+from ai_service import validate_model, classify, retry_call
+from actions import parse_response
+from budget import Budget, BudgetExceeded
 import uuid
 
 load_dotenv()
@@ -33,7 +38,16 @@ LIMITE_HORA = int(os.getenv("LIMITE_HORA", "30"))
 MODEL = os.getenv("MODEL", "claude-sonnet-4-5-20250929")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("kiazop")
+logging.getLogger("uvicorn.access").addFilter(RedactAccess())
+validate_model(MODEL)
+validate_admin(DEMO, ADMIN_KEY)
 db = Database(os.getenv("DATABASE_URL"), DB_PATH)
+keys = [key.strip() for key in os.getenv('MESSAGE_ENCRYPTION_KEYS', '').split(',') if key.strip()]
+if keys:
+    db.vault = Vault(keys, allow_legacy=DEMO or os.getenv('ALLOW_LEGACY_PLAINTEXT') == 'true')
+elif not DEMO:
+    raise ValueError('MESSAGE_ENCRYPTION_KEYS obrigatório em produção')
+gate = Gate(db, ADMIN_KEY)
 lock = db
 if not db.postgres:
     # PRAGMA journal_mode não pode executar dentro de uma transacção explícita.
@@ -56,6 +70,7 @@ queue = JobQueue(db, lease_seconds=int(os.getenv("WORKER_LEASE_SECONDS", "300"))
 queue.initialize()
 notifications = NotificationService(db)
 notifications.initialize()
+privacy = Privacy(db, gate.key)
 with db:
     db.executescript("""
     CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY, code TEXT, phone TEXT, detail TEXT, resolved INTEGER DEFAULT 0, UNIQUE(code,phone));
@@ -137,6 +152,8 @@ def alert(code, phone, detail):
                (code, phone, detail))
 
 
+budget = Budget(db, lambda code: alert(code, '*', 'Orçamento diário de IA: ' + ('80% reservado/usado.' if code.endswith('80') else 'Limite atingido ou próxima chamada excederia o saldo.')))
+
 def handoff(phone, reason):
     db.execute('INSERT OR IGNORE INTO paused(phone) VALUES(?)', (phone,))
     db.execute("INSERT INTO handoff_reasons(phone,reason) VALUES(?,?) ON CONFLICT(phone) DO UPDATE SET reason=excluded.reason",
@@ -217,48 +234,53 @@ def build_reply(job):
         if DEMO:
             bruto = resposta_demo(texto)
         else:
-            with Anthropic(timeout=30, max_retries=2) as client:
-                r = client.messages.create(model=MODEL, max_tokens=600, system=sistema(), messages=historico(phone))
+            with Anthropic(timeout=30, max_retries=0) as client:
+                prompt, history = sistema(), historico(phone)
+                # Cada retry reserva separadamente. Falha/crash mantém reserva conservadora.
+                def operation():
+                    estimate = budget.cost(len((prompt + json.dumps(history, ensure_ascii=False)).encode('utf-8')) + 4096, 600)
+                    reservation = budget.reserve(estimate)
+                    response = client.messages.create(model=MODEL, max_tokens=600, system=prompt, messages=history)
+                    usage = getattr(response, 'usage', None)
+                    if usage is not None:
+                        budget.settle(reservation, budget.cost(usage.input_tokens, usage.output_tokens))
+                    return response
+                r = retry_call(operation)
             bruto = "\n".join(b.text for b in r.content if b.type == 'text')
-    except Exception:
-        log.error('Falha no serviço de IA; conversa encaminhada')
+    except Exception as exc:
+        category, _ = classify(exc)
+        with db:
+            alert('ai_' + category, phone, 'IA indisponível: ' + category + '. Atendimento humano necessário.')
+        log.error('ai_failure category=%s', category)
         bruto = 'Obrigado pela mensagem. A nossa equipa dará continuidade ao atendimento. [HUMANO]'
-    clean = re.split(r"\[(?:AGENDAMENTO|SOLICITACAO|HUMANO)\]", bruto)[0].strip() or 'A equipa dará continuidade ao atendimento.'
-    return {'reply': clean, 'raw': bruto, 'human': '[HUMANO]' in bruto}
+    result = parse_response(bruto, negocio()['operacoes'])
+    if result.get('invalid_action'):
+        with db:
+            alert('invalid_action', phone, 'Resposta da IA com acção inválida; requer revisão humana.')
+    return result
 
 
-def apply_actions(phone, bruto):
-    m = re.search(r"\[AGENDAMENTO\]\s*(\{[^\n]*\})", bruto)
-    if m and negocio()['operacoes']['agendamentos']:
-        try:
-            d = json.loads(m.group(1))
-            values = [d[k] for k in ("nome", "servico", "data_hora")]
-            if all(isinstance(v, str) and 0 < len(v.strip()) <= 300 for v in values):
-                exists = db.execute("SELECT 1 FROM bookings WHERE phone=? AND nome=? AND servico=? AND data_hora=?", (phone, *values)).fetchone()
-                if not exists:
-                    db.execute("INSERT INTO bookings(phone,nome,servico,data_hora) VALUES(?,?,?,?)", (phone, *values))
-        except (ValueError, KeyError, TypeError):
-            log.warning("Marcação inválida ignorada")
-    request_match = re.search(r"\[SOLICITACAO\]\s*(\{[^\n]*\})", bruto)
-    registered = False
-    if request_match:
-        try:
-            d = json.loads(request_match.group(1))
-            kind, name, description = d['tipo'], d['nome'], d['descricao']
-            preference = d.get('preferencia', '')
-            valid = (kind in KINDS and negocio()['operacoes'][KINDS[kind]]
-                     and all(isinstance(v, str) and 0 < len(v.strip()) <= 1200 for v in (name, description))
-                     and isinstance(preference, str) and len(preference) <= 500
-                     and (kind not in ('agendamento', 'reserva') or bool(preference.strip())))
-            if valid:
-                values = (phone, kind, name.strip(), description.strip(), preference.strip())
-                exists = db.execute("SELECT 1 FROM requests WHERE phone=? AND tipo=? AND nome=? AND descricao=? AND preferencia=?", values).fetchone()
-                if not exists:
-                    db.execute("INSERT INTO requests(phone,tipo,nome,descricao,preferencia) VALUES(?,?,?,?,?)", values)
-                    registered = True
-        except (ValueError, KeyError, TypeError):
-            log.warning('Solicitação inválida ignorada')
-    return bool(m or registered)
+def apply_actions(phone, result):
+    # Revalidação também ao finalizar jobs preparados por revisões anteriores.
+    action = result.get('action')
+    if not action:
+        return False
+    tag, data = action['tag'], action['data']
+    raw = 'Pedido a confirmar. ' + tag + json.dumps(data)
+    validated = parse_response(raw, negocio()['operacoes'])
+    if not validated.get('action'):
+        return False
+    if tag == '[AGENDAMENTO]':
+        values = (data['nome'], data['servico'], data['data_hora'])
+        if values not in db.execute('SELECT nome,servico,data_hora FROM bookings WHERE phone=?', (phone,)).fetchall():
+            db.execute('INSERT INTO bookings(phone,nome,servico,data_hora) VALUES(?,?,?,?)', (phone, *values))
+            return True
+    else:
+        values = (data['tipo'], data['nome'], data['descricao'], data['preferencia'])
+        if values not in db.execute('SELECT tipo,nome,descricao,preferencia FROM requests WHERE phone=?', (phone,)).fetchall():
+            db.execute('INSERT INTO requests(phone,tipo,nome,descricao,preferencia) VALUES(?,?,?,?,?)', (phone, *values))
+            return True
+    return False
 
 
 def finalize_job(job):
@@ -269,7 +291,9 @@ def finalize_job(job):
     db.execute("DELETE FROM paused WHERE phone=? AND phone IN (SELECT phone FROM handoff_reasons WHERE reason='delivery_unknown')", (phone,))
     db.execute("DELETE FROM handoff_reasons WHERE phone=? AND reason='delivery_unknown'", (phone,))
     db.execute("UPDATE alerts SET resolved=1 WHERE phone=? AND code='delivery_unknown'", (phone,))
-    requested = apply_actions(phone, result.get('raw', ''))
+    if 'raw' in result and result.get('raw'):
+        result = {**result, **parse_response(result['raw'], negocio()['operacoes'])}
+    requested = apply_actions(phone, result)
     if result.get('human'):
         handoff(phone, 'profile_unready' if result.get('profile_blocked') else 'human')
     db.execute("INSERT INTO msgs(phone,role,text) VALUES(?,?,?)", (phone, 'assistant', result['reply']))
@@ -359,8 +383,11 @@ def responder(phone, texto):
 
 def auth(request: Request):
     token = request.headers.get("Authorization", "").removeprefix("Bearer ")
-    if not ADMIN_KEY or not secrets.compare_digest(token, ADMIN_KEY):
-        raise HTTPException(401, "Autenticação necessária")
+    try:
+        gate.authenticate(request.client.host if request.client else 'unknown', token, ADMIN_KEY)
+    except HTTPException as exc:
+        log.warning('Admin authentication rejected status=%d', exc.status_code)
+        raise
 
 
 @app.get("/api/business/templates", dependencies=[Depends(auth)])
@@ -384,11 +411,23 @@ def save_business(body: BusinessProfile):
 
 @app.middleware("http")
 async def headers(request, call_next):
-    response = await call_next(request)
+    response = None
+    if request.url.path == '/webhook' and request.method == 'POST':
+        try:
+            gate.hit('webhook', request.client.host if request.client else 'unknown', int(os.getenv('WEBHOOK_RATE_PER_MINUTE', '120')), 60)
+            length = request.headers.get('content-length')
+            if length and (not length.isdigit() or int(length) > 1_000_000):
+                raise HTTPException(413, 'Payload demasiado grande')
+        except HTTPException as exc:
+            from fastapi.responses import JSONResponse
+            response = JSONResponse({'detail': exc.detail}, status_code=exc.status_code, headers=exc.headers)
+    if response is None:
+        response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = "no-store"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors *"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     return response
 
 
@@ -408,7 +447,7 @@ def health():
 @app.get("/webhook")
 def verificar(request: Request):
     q = request.query_params
-    if VERIFY_TOKEN and q.get("hub.mode") == "subscribe" and secrets.compare_digest(q.get("hub.verify_token", ""), VERIFY_TOKEN):
+    if VERIFY_TOKEN and q.get("hub.mode") == "subscribe" and secrets.compare_digest(q.get("hub.verify_token", "").encode("utf-8"), VERIFY_TOKEN.encode("utf-8")):
         return Response(q.get("hub.challenge", ""), media_type="text/plain")
     raise HTTPException(403, "Verificação inválida")
 
@@ -417,11 +456,14 @@ def verificar(request: Request):
 async def receber(request: Request):
     if DEMO or not APP_SECRET:
         raise HTTPException(503, "Webhook não configurado")
-    raw = await request.body()
-    if len(raw) > 1_000_000:
-        raise HTTPException(413, "Payload demasiado grande")
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > 1_000_000:
+            raise HTTPException(413, 'Payload demasiado grande')
+        raw.extend(chunk)
+    raw = bytes(raw)
     signature = "sha256=" + hmac.new(APP_SECRET.encode(), raw, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(signature, request.headers.get("x-hub-signature-256", "")):
+    if not hmac.compare_digest(signature.encode("utf-8"), request.headers.get("x-hub-signature-256", "").encode("utf-8")):
         raise HTTPException(403, "Assinatura inválida")
     try:
         body = json.loads(raw)
@@ -447,19 +489,28 @@ async def receber(request: Request):
 
 
 @app.get("/api/dashboard", dependencies=[Depends(auth)])
-def dashboard():
+def dashboard(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), request_page: int = Query(1, ge=1)):
     with lock:
-        bookings = [dict(zip(('id', 'phone', 'nome', 'servico', 'data_hora', 'ts'), r)) for r in db.execute("SELECT id,phone,nome,servico,data_hora,ts FROM bookings ORDER BY id DESC LIMIT 200")]
-        requests = [dict(zip(('id', 'phone', 'tipo', 'nome', 'descricao', 'preferencia', 'ts'), r)) for r in db.execute("SELECT id,phone,tipo,nome,descricao,preferencia,ts FROM requests ORDER BY id DESC LIMIT 200")]
+        bookings = [dict(zip(('id', 'phone', 'nome', 'servico', 'data_hora', 'ts'), r)) for r in db.execute("SELECT id,phone,nome,servico,data_hora,ts FROM bookings ORDER BY id DESC LIMIT ? OFFSET ?", (page_size, (request_page-1)*page_size))]
+        requests = [dict(zip(('id', 'phone', 'tipo', 'nome', 'descricao', 'preferencia', 'ts'), r)) for r in db.execute("SELECT id,phone,tipo,nome,descricao,preferencia,ts FROM requests ORDER BY id DESC LIMIT ? OFFSET ?", (page_size, (request_page-1)*page_size))]
+        total_requests = db.execute('SELECT (SELECT count(*) FROM requests)+(SELECT count(*) FROM bookings)').fetchone()[0]
+        solicitations = [dict(zip(('id','source','phone','tipo','nome','descricao','preferencia','ts'), row)) for row in db.execute("""
+            SELECT id,'request' AS source,phone,tipo,nome,descricao,preferencia,ts FROM requests
+            UNION ALL SELECT id,'booking' AS source,phone,'agendamento' AS tipo,nome,servico AS descricao,data_hora AS preferencia,ts FROM bookings
+            ORDER BY ts DESC,source,id DESC LIMIT ? OFFSET ?
+        """, (page_size, (request_page-1)*page_size))]
         conversations = []
-        for phone, in db.execute("SELECT phone FROM msgs GROUP BY phone ORDER BY max(id) DESC LIMIT 100").fetchall():
+        for phone, in db.execute("SELECT phone FROM msgs GROUP BY phone ORDER BY max(id) DESC,phone LIMIT ? OFFSET ?", (page_size, (page-1)*page_size)).fetchall():
             messages = db.execute("SELECT role,text,ts FROM msgs WHERE phone=? ORDER BY id DESC LIMIT 50", (phone,)).fetchall()[::-1]
             conversations.append({"phone": phone, "paused": bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone()), "needs_human": notifications.needs_human(phone) or bool(db.execute("SELECT 1 FROM paused WHERE phone=?", (phone,)).fetchone()), "messages": [dict(zip(('role','text','ts'), r)) for r in messages]})
         stats = {"clients": db.execute("SELECT count(DISTINCT phone) FROM msgs").fetchone()[0], "messages": db.execute("SELECT count(*) FROM msgs").fetchone()[0], "paused": db.execute("SELECT count(*) FROM paused").fetchone()[0], "bookings": db.execute("SELECT count(*) FROM bookings").fetchone()[0], "requests": db.execute("SELECT count(*) FROM requests").fetchone()[0], "failed": db.execute("SELECT count(*) FROM inbox WHERE status='failed'").fetchone()[0],
                  "notifications_failed": db.execute("SELECT count(*) FROM notifications WHERE status='failed'").fetchone()[0],
                  "notifications_pending": db.execute("SELECT count(*) FROM notifications WHERE status IN ('pending','sending')").fetchone()[0]}
     return {"business": negocio(), "demo": DEMO, "stats": stats, "conversations": conversations, "bookings": bookings, "requests": requests, "profile_ready": profile_ready(),
-            "notifications": notifications.list_recent(),
+            "notifications": notifications.list_recent(), "ai_budget": budget.status(),
+            "solicitations": solicitations,
+            "pagination": {"conversations": {"page": page, "page_size": page_size, "total": stats['clients']},
+                           "solicitations": {"page": request_page, "page_size": page_size, "total": total_requests}},
             "alerts": [dict(zip(('code','phone','detail'), row)) for row in db.execute("SELECT code,phone,detail FROM alerts WHERE resolved=0")] }
 
 
@@ -497,3 +548,45 @@ def retry():
     with db:
         db.execute("UPDATE jobs SET state='pending',attempts=0,next_attempt=0 WHERE state='failed'")
     return {"ok": True, "message": "Agendado para o worker. Envios incertos não foram repetidos."}
+
+
+@app.get('/api/privacy/{phone}', dependencies=[Depends(auth)])
+def export_private(phone: str):
+    return privacy.export(phone)
+
+
+@app.delete('/api/privacy/{phone}', dependencies=[Depends(auth)])
+def delete_private(phone: str, confirm: str = ''):
+    if confirm != 'delete':
+        raise HTTPException(400, 'Confirmação delete obrigatória')
+    privacy.delete(phone)
+    return {'ok': True}
+
+
+@app.post('/api/privacy/purge', dependencies=[Depends(auth)])
+def purge_private(confirm: str = ''):
+    if confirm != 'purge':
+        raise HTTPException(400, 'Confirmação purge obrigatória')
+    privacy.purge()
+    return {'ok': True, 'retention_days': 90}
+
+
+@app.post('/api/diagnostics/ai', dependencies=[Depends(auth)])
+def diagnose_ai():
+    if not os.getenv('ANTHROPIC_API_KEY'):
+        return {'verified': False, 'category': 'configuration', 'model': MODEL}
+    try:
+        with Anthropic(timeout=10, max_retries=0) as client:
+            model = client.models.retrieve(MODEL)
+        return {'verified': True, 'category': 'ok', 'model': model.id}
+    except Exception as exc:
+        return {'verified': False, 'category': classify(exc)[0], 'model': MODEL}
+
+
+@app.get('/api/conversations/{phone}/messages', dependencies=[Depends(auth)])
+def conversation_messages(phone: str, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100)):
+    with db:
+        total = db.execute('SELECT count(*) FROM msgs WHERE phone=?', (phone,)).fetchone()[0]
+        rows = db.execute('SELECT id,role,text,ts FROM msgs WHERE phone=? ORDER BY id DESC LIMIT ? OFFSET ?',
+                          (phone, page_size, (page-1)*page_size)).fetchall()[::-1]
+    return {'messages': [dict(zip(('id','role','text','ts'), row)) for row in rows], 'page': page, 'page_size': page_size, 'total': total}

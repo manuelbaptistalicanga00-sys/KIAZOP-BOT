@@ -1,3 +1,5 @@
+> **Actualização:** B4/B5 e F2 seleccionada foram implementados localmente. Ler [relatório novo](B4_B5_F2.md) e [chaves/migração](PRIVACIDADE_E_CHAVES.md) antes deste roteiro histórico; não reverter código sem reverter a cópia cifrada de forma controlada. Go-live continua bloqueado por provas de staging e restantes itens.
+
 # Operação assistida — um cliente por instalação
 
 Estado: procedimento preparado, **não executado em produção nem garantia de activação em 60 minutos**.

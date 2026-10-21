@@ -45,6 +45,7 @@ class Database:
             self.engine = create_engine('sqlite:///' + str(path), hide_parameters=True,
                                         connect_args={'check_same_thread': False, 'timeout': 10})
         self.local = threading.local()
+        self.vault = None
 
     @property
     def in_transaction(self):
@@ -62,13 +63,14 @@ class Database:
         return query.replace('?', '%s')
 
     def execute(self, query, params=()):
+        params = self.vault.parameters(query, params) if self.vault else params
         conn = getattr(self.local, 'conn', None)
         if conn is not None:
             result = conn.exec_driver_sql(self.sql(query), params)
-            return Result(result.fetchall() if result.returns_rows else [], result.rowcount)
+            return Result((self.vault.rows(result) if self.vault else result.fetchall()) if result.returns_rows else [], result.rowcount)
         with self.engine.begin() as conn:
             result = conn.exec_driver_sql(self.sql(query), params)
-            return Result(result.fetchall() if result.returns_rows else [], result.rowcount)
+            return Result((self.vault.rows(result) if self.vault else result.fetchall()) if result.returns_rows else [], result.rowcount)
 
     def executescript(self, script):
         for query in script.split(';'):

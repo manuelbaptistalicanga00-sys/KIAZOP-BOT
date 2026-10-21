@@ -1,0 +1,62 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+______________ test_b5_message_storage_is_encrypted_and_readable _______________
+
+    def test_b5_message_storage_is_encrypted_and_readable():
+        bot.responder('244900000001', 'Texto confidencial sintético')
+        with bot.db.engine.connect() as conn:
+            raw = conn.exec_driver_sql('SELECT text FROM msgs ORDER BY id LIMIT 1').fetchone()[0]
+            inbox = conn.exec_driver_sql('SELECT payload FROM inbox LIMIT 1').fetchone()[0]
+>       assert 'confidencial' not in raw
+E       AssertionError: assert 'confidencial' not in 'Texto confi...al sintético'
+E
+E         'confidencial' is contained here:
+E           Texto confidencial sintético
+
+tests/test_security_privacy.py:75: AssertionError
+________________ test_b5_reversible_migration_on_synthetic_copy ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-13/test_b5_reversible_migration_o0')
+
+    def test_b5_reversible_migration_on_synthetic_copy(tmp_path):
+>       from cryptography.fernet import Fernet
+E       ModuleNotFoundError: No module named 'cryptography'
+
+tests/test_security_privacy.py:81: ModuleNotFoundError
+_______________________ test_b5_export_delete_and_audit ________________________
+
+    def test_b5_export_delete_and_audit():
+        client = TestClient(bot.app)
+        bot.responder('244900000001', 'Texto a eliminar')
+        response = client.get('/api/privacy/244900000001', headers=AUTH)
+>       assert response.status_code == 200
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_security_privacy.py:103: AssertionError
+_________________ test_b5_retention_purges_old_data_not_recent _________________
+
+    def test_b5_retention_purges_old_data_not_recent():
+        bot.responder('244900000001', 'Antigo')
+        bot.responder('244900000002', 'Recente')
+        bot.db.execute("UPDATE msgs SET ts='2020-01-01 00:00:00' WHERE phone='244900000001'")
+        bot.db.execute("UPDATE inbox SET ts='2020-01-01 00:00:00' WHERE id IN (SELECT id FROM jobs WHERE phone='244900000001')")
+        bot.db.execute("UPDATE jobs SET created_at=0 WHERE phone='244900000001'")
+        response = TestClient(bot.app).post('/api/privacy/purge', headers=AUTH, params={'confirm': 'purge'})
+>       assert response.status_code == 200
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_security_privacy.py:119: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/user/KIAZOP-BOT/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_security_privacy.py::test_b5_message_storage_is_encrypted_and_readable
+FAILED tests/test_security_privacy.py::test_b5_reversible_migration_on_synthetic_copy
+FAILED tests/test_security_privacy.py::test_b5_export_delete_and_audit - asse...
+FAILED tests/test_security_privacy.py::test_b5_retention_purges_old_data_not_recent
+4 failed, 6 deselected, 1 warning in 1.02s

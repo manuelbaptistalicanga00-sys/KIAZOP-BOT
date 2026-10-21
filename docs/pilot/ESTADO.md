@@ -1,3 +1,5 @@
+> **Histórico do lote B1–B3.** Estado posterior: [B4/B5 + F2 seleccionada](B4_B5_F2.md). As pendências B4/B5 descritas abaixo referem-se à data desse lote.
+
 # Estado — Fase 0 + Fase 1 B1–B3
 
 Data: 21-10-2026. Instalação dedicada por cliente, não multi-tenant.

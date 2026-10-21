@@ -1,5 +1,21 @@
 # Changelog
 
+## Lote B4/B5 + F2 seleccionada — 2026-10-21 — não publicado
+
+- B4 `security.py`/`bot.py`: CSP/XFO, UTF-8, validação de ADMIN_KEY no arranque,
+  rate limiting persistente, backoff Retry-After, limites de corpo em streaming.
+- B5 `privacy.py`/`privacy_migrate.py`/`database.py`/`worker.py`: Fernet/MultiFernet,
+  migração offline reversível/atómica, rotação, retenção diária 90 dias,
+  export/delete/purge com auditoria e recusa de dados activos; access logs mascarados.
+- F2 seleccionada: `.env.example` único; `ai_service.py` valida MODEL e classifica
+  falhas/retries; endpoint admin de diagnóstico; `actions.py` tags Pydantic estritas;
+  `budget.py` reservas/acerto diário e alertas; `bot.py`/`static/*` paginação.
+- Testes escritos/executados antes das alterações: logs vermelho/verde em
+  `docs/pilot/evidence/`. Final: 90 Python aprovados, 8 kit, Ruff/tsc/audit limpos.
+- `test_postgres_queue.py`: PostgreSQL real local descartável, não Neon. Sem chamadas
+  reais de fornecedores. Relatório: `docs/pilot/B4_B5_F2.md`; limites/migração/chaves:
+  `docs/pilot/PRIVACIDADE_E_CHAVES.md`. Sem declaração de conformidade ou go-live.
+
 ## 3.2.0 — 2026-10-21 — lote local, não aprovado para go-live
 
 - **F0:** baseline documentada em `docs/pilot/BASELINE.md`; checkpoint `8805838`.

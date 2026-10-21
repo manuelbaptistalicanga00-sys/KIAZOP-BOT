@@ -1,3 +1,6 @@
 -r requirements.txt
 pytest>=8,<9
 ruff>=0.8,<1
+
+# PostgreSQL local descartável para testes Linux; não é serviço de produção.
+pgserver==0.1.4; sys_platform == "linux" and platform_machine == "x86_64"

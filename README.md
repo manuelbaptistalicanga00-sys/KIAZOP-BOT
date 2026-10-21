@@ -4,15 +4,20 @@ Assistente multissetor WhatsApp Cloud API + Claude, com painel responsivo em por
 histórico de conversas, transferência para a equipa e solicitações de agendamento,
 reserva, encomenda e orçamento. Não é exclusivo para clínicas.
 
-## Estado deste lote: Fase 0 + B1–B3 (3.2.0)
+## Estado actual — B4/B5 + Fase 2 seleccionada
 
-**Não aprovado para go-live.** Implementação local de inbox/worker, notificações
-persistentes e bloqueio por perfil. B4/B5 e fases 2–3 continuam pendentes;
-PostgreSQL/Neon e contratos Meta não foram testados com credenciais reais.
-Uma instalação dedicada por cliente; o enterprise-kit continua apenas referência.
-Consulte [estado e evidências](docs/pilot/ESTADO.md),
-[operação/rollback](docs/pilot/OPERACAO.md) e
-[checklist de go-live](docs/pilot/GO_LIVE.md).
+**Não aprovado para go-live.** B1–B5 e os itens F2 seleccionados têm implementação
+local; restantes itens F2/F3 e provas de staging continuam pendentes. Sem push/deploy
+neste lote. O deploy de produção veio desta branch, mas ainda do commit antigo
+`1857335`, não destas correcções.
+
+- [Relatório e evidências vermelho/verde](docs/pilot/B4_B5_F2.md)
+- [Cifragem, migração reversível, retenção e rotação](docs/pilot/PRIVACIDADE_E_CHAVES.md)
+- [Operação/rollback](docs/pilot/OPERACAO.md) · [checklist bloqueado](docs/pilot/GO_LIVE.md)
+
+90 testes Python aprovados, incluindo PostgreSQL **real local descartável**;
+Neon/Meta/Claude reais não verificados. Enterprise-kit continua apenas referência.
+Não há alegação de conformidade legal ou SLA.
 
 ## Executar sem credenciais (demonstração)
 
@@ -24,7 +29,9 @@ cp .env.example .env
 ```
 
 Em `.env`, configure `DEMO_MODE=true`, `DB_PATH=demo.db` e uma `ADMIN_KEY`
-forte escolhida por si. Depois:
+forte escolhida por si. Para cifrar demo persistente, configure também uma chave
+Fernet estável em `MESSAGE_ENCRYPTION_KEYS`; sem chave demo guarda em claro e não
+deve receber dados reais. Depois:
 
 ```bash
 uvicorn bot:app --host 0.0.0.0 --port 8000
@@ -38,7 +45,9 @@ de dados de produção. Configure as informações reais em **O meu negócio**. 
 ## Configurar atendimento real
 
 1. Defina `DEMO_MODE=false` e use uma base de dados exclusiva de produção.
-2. Preencha `ANTHROPIC_API_KEY`, `WA_TOKEN`, `WA_PHONE_ID`, `VERIFY_TOKEN`,
+2. Configure `ADMIN_KEY` com pelo menos 32 caracteres e `MESSAGE_ENCRYPTION_KEYS`
+   no secret manager. Migre cópias antes de bases existentes: [procedimento](docs/pilot/PRIVACIDADE_E_CHAVES.md).
+   Preencha `ANTHROPIC_API_KEY`, `WA_TOKEN`, `WA_PHONE_ID`, `VERIFY_TOKEN`,
    `APP_SECRET`, `ADMIN_KEY` e, opcionalmente, `OWNER_PHONE`.
 3. Em **O meu negócio**, guarde um nome real e pelo menos horário, catálogo ou contacto. Sem perfil guardado e validado, não há IA: há um único encaminhamento neutro e pausa por conversa.
 4. Publique em HTTPS e configure `https://SEU-DOMINIO/webhook` na Meta,
@@ -58,7 +67,10 @@ configurado, não uma garantia de disponibilidade externa.
 - `/` e `/painel`: painel com métricas reais, pesquisa de conversas, histórico,
   pausa/reativação do assistente e lista de solicitações de marcação.
 - `/health`: saúde local da aplicação/base de dados (não testa fornecedores).
-- `GET /api/dashboard`: dados operacionais.
+- `GET /api/dashboard?page=1&page_size=25&request_page=1`: dados paginados.
+- `GET /api/conversations/{telefone}/messages?page=1&page_size=50`: histórico paginado.
+- `POST /api/diagnostics/ai`: diagnóstico autenticado de metadados do MODEL.
+- `GET/DELETE /api/privacy/{telefone}` e `POST /api/privacy/purge`: export/delete/expurgo; acções destrutivas exigem confirmação explícita.
 - `POST /api/conversations/{telefone}/pause`: `{"paused": true}` ou `false`.
 - `POST /api/inbox/retry`: agendar só falhas com rejeição conhecida; nunca reenviar envios incertos.
 - `POST /api/demo/message`: simulador, apenas no modo demo.
@@ -87,8 +99,8 @@ removidos por segurança. As ações que alteram dados agora usam POST.
 - Limite por cliente/hora e histórico de 20 mensagens. Pedidos dependem de
   confirmação pela equipa; imagens/áudios não são transcritos.
 
-**Limites restantes:** autenticação/rate limiting/CSP B4, retenção/encriptação B5,
-budget/diagnóstico/robustez de IA F2 e revisão enterprise F3. Templates só de
+**Limites restantes:** provas de staging, restante observabilidade/UX/diagnósticos
+F2 não seleccionados e revisão enterprise F3. Budget local é estimativa, não factura. Templates só de
 alerta ao dono, não uma solução geral para mensagens de cliente fora da janela.
 Custos Meta/Anthropic são do operador. Não há alegação de conformidade ou SLA.
 

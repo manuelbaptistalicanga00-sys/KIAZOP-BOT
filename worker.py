@@ -30,6 +30,7 @@ def main():
     notification_task = None
     with ThreadPoolExecutor(max_workers=args.concurrency) as pool, ThreadPoolExecutor(max_workers=1) as notify_pool:
         while not stop.is_set():
+            bot.privacy.scheduled()
             bot.maintenance(send_notifications=False)
             # Alertas lentos à equipa não bloqueiam claims/IA de outras conversas.
             if notification_task is None or notification_task.done():

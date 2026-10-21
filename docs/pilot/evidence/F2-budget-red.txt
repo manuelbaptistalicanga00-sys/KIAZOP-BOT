@@ -1,0 +1,26 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+______________ test_budget_warns_blocks_and_survives_new_instance ______________
+
+    def test_budget_warns_blocks_and_survives_new_instance():
+>       from budget import Budget, BudgetExceeded
+E       ModuleNotFoundError: No module named 'budget'
+
+tests/test_phase2.py:106: ModuleNotFoundError
+__________________ test_budget_atomic_concurrent_reservations __________________
+
+    def test_budget_atomic_concurrent_reservations():
+>       from budget import Budget, BudgetExceeded
+E       ModuleNotFoundError: No module named 'budget'
+
+tests/test_phase2.py:121: ModuleNotFoundError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/user/KIAZOP-BOT/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_phase2.py::test_budget_warns_blocks_and_survives_new_instance
+FAILED tests/test_phase2.py::test_budget_atomic_concurrent_reservations - Mod...
+2 failed, 18 deselected, 1 warning in 1.11s

@@ -6,3 +6,5 @@
 .safety-alerts{border:2px solid #a71930;background:#fff1f2;color:#861428;border-radius:8px;padding:12px 18px;margin:16px 0;font-size:14px}
 .needs-human,.badge.human{color:#861428!important;background:#fff1f2!important;border-left:3px solid #a71930}
 #notification-panel{margin:16px 0;padding:20px}#notification-list{padding-left:20px;font-size:13px}#notification-list li{padding:8px} .safety-alerts[hidden],#notification-panel[hidden]{display:none}
+
+.pagination{display:flex;gap:12px;align-items:center;padding:12px;flex-wrap:wrap}.pagination button:disabled{opacity:.5;cursor:not-allowed}

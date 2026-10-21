@@ -5,3 +5,5 @@ anthropic>=0.40,<1
 python-dotenv>=1.0,<2
 SQLAlchemy>=2.0,<3
 psycopg[binary]>=3.2,<4
+
+cryptography>=44,<47

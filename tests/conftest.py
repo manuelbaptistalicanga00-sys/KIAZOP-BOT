@@ -3,6 +3,8 @@ import os
 import tempfile
 
 import pytest
+from cryptography.fernet import Fernet
+os.environ["MESSAGE_ENCRYPTION_KEYS"] = Fernet.generate_key().decode()
 
 for key in ('DATABASE_URL', 'DIRECT_URL', 'WA_TOKEN', 'WA_PHONE_ID', 'VERIFY_TOKEN',
             'APP_SECRET', 'OWNER_PHONE', 'ANTHROPIC_API_KEY', 'OWNER_TEMPLATE_NAME'):

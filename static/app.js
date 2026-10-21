@@ -1,5 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
+let conversationPage=1, requestPage=1;
 let token = sessionStorage.getItem('kiazop-key') || '', data, selected, tab = 'overview';
 const names = {overview:['Visão geral','Uma visão clara do seu negócio.'], conversations:['Conversas','Cada conversa merece atenção.'], bookings:['Solicitações','Pedidos, reservas e novas oportunidades.'], simulator:['Laboratório','Um espaço para experimentar.'], settings:['O meu negócio','Um assistente à medida do seu negócio.']};
 const el = (tag, text, cls) => { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; };
@@ -20,7 +21,7 @@ function badge(paused){return el('span',paused?'Com a equipa':'Assistente ativo'
 function renderChat(container, messages){container.replaceChildren(); if(!messages.length){container.append(el('div','Nenhuma mensagem ainda.','empty'));return;} messages.forEach(m=>{const b=el('div',m.text,'bubble '+m.role);b.append(el('small',`${m.role==='user'?'Cliente':'Assistente'} · ${m.ts} UTC`));container.append(b);});container.scrollTop=container.scrollHeight;}
 async function refresh(){
  $('refresh').disabled=true;
- try{data=await api('/api/dashboard');$('login').hidden=true;$('workspace').hidden=false;
+ try{data=await api(`/api/dashboard?page=${conversationPage}&request_page=${requestPage}&page_size=25`);$('login').hidden=true;$('workspace').hidden=false;
  $('business').replaceChildren(document.createTextNode(data.business.nome),el('small',data.business.setor || 'Central de atendimento'));
  $('business-initials').textContent=data.business.nome.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
  $('mode').textContent=data.demo?'● Demonstração local':'● Modo produção';
@@ -32,17 +33,22 @@ async function refresh(){
  $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.needs_human));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda está tudo tranquilo por aqui. Experimente o laboratório para iniciar a primeira conversa.','empty'));
  $('booking-rows').replaceChildren();
  const kindLabels={agendamento:'Agendamento',reserva:'Reserva',encomenda:'Encomenda',orcamento:'Orçamento'};
- const requests=[...data.requests,...data.bookings.map(b=>({...b,tipo:'agendamento',descricao:b.servico,preferencia:b.data_hora}))].sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+ const requests=data.solicitations;
  requests.forEach(b=>{const tr=el('tr');[kindLabels[b.tipo]||b.tipo,b.nome,b.descricao,b.preferencia||'—','+'+b.phone,'A confirmar'].forEach(v=>tr.append(el('td',v)));$('booking-rows').append(tr);});
  if(!requests.length){const td=el('td','Sem solicitações por enquanto.');td.colSpan=6;const tr=el('tr');tr.append(td);$('booking-rows').append(tr);}
  if(!businessDirty)fillBusiness(data.business);
  if(!Object.keys(data.business.informacoes.produtos).length&&!Object.keys(data.business.informacoes.servicos).length){const b=el('button','Configurar o meu negócio','outline');b.onclick=()=>switchTab('settings');$('notice').append(document.createTextNode(' Configure os dados reais antes de atender clientes. '),b);}
 
- renderConversations();renderDemo();
+ renderConversations();renderDemo();renderPagination();
  }finally{$('refresh').disabled=false;}
 }
+function renderPagination(){
+ const setup=(id,meta,change)=>{let node=$(id);if(!node){node=el('div',undefined,'pagination');node.id=id;(id==='conversation-pager'?$('conversation-list').parentElement:$('booking-rows').closest('.panel')).append(node);}node.replaceChildren();const prev=el('button','Anterior'),next=el('button','Seguinte');prev.disabled=meta.page<=1;next.disabled=meta.page*meta.page_size>=meta.total;for(const [button,delta] of [[prev,-1],[next,1]])button.onclick=async()=>{button.disabled=true;try{await change(meta.page+delta);await refresh();}catch(error){$('notice').textContent=error.message;}finally{button.disabled=false;}};node.append(prev,el('span',`Página ${meta.page} · ${meta.total} registos`),next);};
+ setup('conversation-pager',data.pagination.conversations,async p=>{conversationPage=p;selected=undefined;$('thread').replaceChildren(el('p','Seleccione uma conversa.'));});
+ setup('request-pager',data.pagination.solicitations,async p=>{requestPage=p;});
+}
 function renderSafety(){
- const warning=$('safety-alerts');warning.replaceChildren();
+ const warning=$('safety-alerts');warning.replaceChildren();if(data.ai_budget){const b=data.ai_budget;warning.append(el('p',`Orçamento IA estimado (${b.day}): $${(b.spent_micro_usd/1e6).toFixed(3)} / $${(b.limit_micro_usd/1e6).toFixed(2)}. Reservas de falhas podem estar incluídas.`));}
  if(!data.demo&&!data.profile_ready)warning.append(el('p','Atendimento automático bloqueado: guarde um nome real e horário, catálogo ou contacto em O meu negócio.'));
  for(const item of data.alerts||[])warning.append(el('p',item.detail));
  if(data.stats.notifications_failed)warning.append(el('p',`${data.stats.notifications_failed} notificação(ões) à equipa falharam. Verifique a lista e assuma os atendimentos pendentes.`));
@@ -57,7 +63,7 @@ function renderSafety(){
 function renderConversations(){
  $('conversation-list').replaceChildren();const filtered=data.conversations.filter(c=>c.phone.includes($('search').value.trim()));filtered.forEach(c=>{const b=el('button','+'+c.phone,'conversation-item'+(selected===c.phone?' selected':''));b.classList.toggle('needs-human',!!c.needs_human);b.append(el('small',c.needs_human?'Precisa de humano':'Assistente ativo'));b.onclick=()=>{selected=c.phone;renderConversations();};$('conversation-list').append(b);});if(!filtered.length)$('conversation-list').append(el('div','Nenhuma conversa encontrada.','empty'));
  const c=data.conversations.find(c=>c.phone===selected);if(!c)return;
- $('thread').replaceChildren();const heading=el('div',undefined,'panel-heading');heading.append(el('h3','+'+c.phone));if(c.needs_human)heading.append(el('span','Precisa de humano','badge needs-human'));const button=el('button',c.paused?'Reativar assistente':'Assumir conversa');button.onclick=async()=>{button.disabled=true;try{await api(`/api/conversations/${encodeURIComponent(c.phone)}/pause`,{method:'POST',body:JSON.stringify({paused:!c.paused})});await refresh();}catch(e){$('notice').textContent=e.message;}finally{button.disabled=false;}};heading.append(button);const chat=el('div',undefined,'chat');$('thread').append(heading,chat);renderChat(chat,c.messages);
+ $('thread').replaceChildren();const heading=el('div',undefined,'panel-heading');heading.append(el('h3','+'+c.phone));if(c.needs_human)heading.append(el('span','Precisa de humano','badge needs-human'));const button=el('button',c.paused?'Reativar assistente':'Assumir conversa');button.onclick=async()=>{button.disabled=true;try{await api(`/api/conversations/${encodeURIComponent(c.phone)}/pause`,{method:'POST',body:JSON.stringify({paused:!c.paused})});await refresh();}catch(e){$('notice').textContent=e.message;}finally{button.disabled=false;}};heading.append(button);const chat=el('div',undefined,'chat');$('thread').append(heading,chat);renderChat(chat,c.messages);const pager=el('div',undefined,'pagination');$('thread').append(pager);let page=1;const load=async()=>{try{const result=await api(`/api/conversations/${encodeURIComponent(c.phone)}/messages?page=${page}`);if(selected!==c.phone)return;renderChat(chat,result.messages);pager.replaceChildren();const newer=el('button','Mais recentes'),older=el('button','Mais antigas');newer.disabled=page<=1;older.disabled=page*result.page_size>=result.total;newer.onclick=()=>{page--;load();};older.onclick=()=>{page++;load();};pager.append(newer,el('span',`Página ${page} · ${result.total} mensagens`),older);}catch(error){$('notice').textContent=error.message;}};load();
 }
 $('search').oninput=()=>data&&renderConversations();
 function renderDemo(){const c=data.conversations.find(c=>c.phone==='244900000001');if(c)renderChat($('demo-chat'),c.messages);$('demo-form').hidden=!data.demo; if(!data.demo)$('demo-chat').replaceChildren(el('div','O laboratório está disponível apenas em DEMO_MODE. O atendimento real continua no WhatsApp.','empty'));if(c?.paused&&data.demo){const b=el('button','Reativar assistente de teste','outline');b.onclick=async()=>{try{await api('/api/conversations/244900000001/pause',{method:'POST',body:JSON.stringify({paused:false})});await refresh();}catch(e){$('notice').textContent=e.message;}};$('demo-chat').append(b);}}
