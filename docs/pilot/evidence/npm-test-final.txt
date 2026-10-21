@@ -1,0 +1,62 @@
+
+> bot-optimization-enterprise-reference@0.1.0 test
+> tsx --test tests/*.test.ts
+
+TAP version 13
+# Subtest: Postgres WASM: RLS, FORCE, contexto, FK composta e auditoria append-only
+ok 1 - Postgres WASM: RLS, FORCE, contexto, FK composta e auditoria append-only
+  ---
+  duration_ms: 1609.442435
+  type: 'test'
+  ...
+# Subtest: RBAC bloqueia agentes na gestão de ligações
+ok 2 - RBAC bloqueia agentes na gestão de ligações
+  ---
+  duration_ms: 1.017648
+  type: 'test'
+  ...
+# Subtest: opt-in, risco QR, telefone e factos têm de ser explícitos
+ok 3 - opt-in, risco QR, telefone e factos têm de ser explícitos
+  ---
+  duration_ms: 2.632975
+  type: 'test'
+  ...
+# Subtest: HMAC verifica bytes e nunca aceita assinatura ausente
+ok 4 - HMAC verifica bytes e nunca aceita assinatura ausente
+  ---
+  duration_ms: 0.667924
+  type: 'test'
+  ...
+# Subtest: webhook só confirma depois de guardar o evento
+ok 5 - webhook só confirma depois de guardar o evento
+  ---
+  duration_ms: 22.754782
+  type: 'test'
+  ...
+# Subtest: token de outra app é rejeitado antes de subscrever ou registar número
+ok 6 - token de outra app é rejeitado antes de subscrever ou registar número
+  ---
+  duration_ms: 2.395965
+  type: 'test'
+  ...
+# Subtest: número fora da WABA autorizada é rejeitado
+ok 7 - número fora da WABA autorizada é rejeitado
+  ---
+  duration_ms: 3.874955
+  type: 'test'
+  ...
+# Subtest: QR não chama o fornecedor sem aceitação do risco
+ok 8 - QR não chama o fornecedor sem aceitação do risco
+  ---
+  duration_ms: 0.313301
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2186.313616

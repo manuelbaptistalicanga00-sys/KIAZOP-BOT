@@ -1,0 +1,97 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_________________________ test_b4_headers_and_no_cors __________________________
+
+    def test_b4_headers_and_no_cors():
+        response = TestClient(bot.app).get('/painel', headers={'Origin': 'https://evil.invalid'})
+>       assert response.headers.get('x-frame-options') == 'DENY'
+E       assert None == 'DENY'
+E        +  where None = get('x-frame-options')
+E        +    where get = Headers({'content-type': 'text/html; charset=utf-8', 'accept-ranges': 'bytes', 'content-length': '9444', 'last-modifie...: 'no-store', 'content-security-policy': "default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors *"}).get
+E        +      where Headers({'content-type': 'text/html; charset=utf-8', 'accept-ranges': 'bytes', 'content-length': '9444', 'last-modifie...: 'no-store', 'content-security-policy': "default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors *"}) = <Response [200 OK]>.headers
+
+tests/test_security_privacy.py:24: AssertionError
+_____________________________ test_b4_utf8_compare _____________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4f7846f850>
+
+    def test_b4_utf8_compare(monkeypatch):
+        monkeypatch.setattr(bot, 'ADMIN_KEY', 'segredo-ç')
+>       bot.auth(SimpleNamespace(headers={'Authorization': 'Bearer segredo-ç'}, client=SimpleNamespace(host='synthetic-ip')))
+
+tests/test_security_privacy.py:33:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+request = namespace(headers={'Authorization': 'Bearer segredo-ç'}, client=namespace(host='synthetic-ip'))
+
+    def auth(request: Request):
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+>       if not ADMIN_KEY or not secrets.compare_digest(token, ADMIN_KEY):
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: comparing strings with non-ASCII characters is not supported
+
+bot.py:362: TypeError
+_________________ test_b4_startup_rejects_short_production_key _________________
+
+    def test_b4_startup_rejects_short_production_key():
+>       from security import validate_admin
+E       ModuleNotFoundError: No module named 'security'
+
+tests/test_security_privacy.py:37: ModuleNotFoundError
+____________________________ test_b4_login_ip_limit ____________________________
+
+    def test_b4_login_ip_limit():
+        client = TestClient(bot.app)
+        for _ in range(5):
+            assert client.get('/api/dashboard', headers={'Authorization': 'Bearer wrong'}).status_code == 401
+        response = client.get('/api/dashboard', headers=AUTH)
+>       assert response.status_code == 429
+E       assert 200 == 429
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_security_privacy.py:49: AssertionError
+__________________ test_b4_webhook_size_rejected_before_read ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4f78449010>
+
+    def test_b4_webhook_size_rejected_before_read(monkeypatch):
+        monkeypatch.setattr(bot, 'DEMO', False)
+        monkeypatch.setattr(bot, 'APP_SECRET', 'synthetic-secret')
+        response = TestClient(bot.app).post('/webhook', content=b'{}', headers={'Content-Length': '1000001'})
+>       assert response.status_code == 413
+E       assert 403 == 413
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_security_privacy.py:57: AssertionError
+_______________________ test_b4_webhook_rate_before_body _______________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4f78443850>
+
+    def test_b4_webhook_rate_before_body(monkeypatch):
+        monkeypatch.setattr(bot, 'DEMO', False)
+        monkeypatch.setattr(bot, 'APP_SECRET', 'synthetic-secret')
+        monkeypatch.setenv('WEBHOOK_RATE_PER_MINUTE', '2')
+        client = TestClient(bot.app)
+        for _ in range(2):
+            assert client.post('/webhook', content=b'{}').status_code == 403
+>       assert client.post('/webhook', content=b'{}').status_code == 429
+E       AssertionError: assert 403 == 429
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+E        +    where <Response [403 Forbidden]> = post('/webhook', content=b'{}')
+E        +      where post = <starlette.testclient.TestClient object at 0x7f4f78443b50>.post
+
+tests/test_security_privacy.py:67: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/user/KIAZOP-BOT/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_security_privacy.py::test_b4_headers_and_no_cors - assert N...
+FAILED tests/test_security_privacy.py::test_b4_utf8_compare - TypeError: comp...
+FAILED tests/test_security_privacy.py::test_b4_startup_rejects_short_production_key
+FAILED tests/test_security_privacy.py::test_b4_login_ip_limit - assert 200 ==...
+FAILED tests/test_security_privacy.py::test_b4_webhook_size_rejected_before_read
+FAILED tests/test_security_privacy.py::test_b4_webhook_rate_before_body - Ass...
+6 failed, 1 warning in 1.28s

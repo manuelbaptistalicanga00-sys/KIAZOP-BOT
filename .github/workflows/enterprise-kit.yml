@@ -1,0 +1,25 @@
+name: Enterprise reference kit
+on:
+  push:
+    paths: ['enterprise-kit/**', '.github/workflows/enterprise-kit.yml']
+  pull_request:
+    paths: ['enterprise-kit/**', '.github/workflows/enterprise-kit.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: enterprise-kit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: enterprise-kit/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm audit --audit-level=high

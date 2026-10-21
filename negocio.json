@@ -1,19 +1,23 @@
 {
-  "nome": "Clínica Sorriso Bonito",
+  "nome": "O meu negócio",
+  "setor": "Geral / personalizado",
   "tom": "simpático, profissional e direto",
   "informacoes": {
-    "morada": "Rua Exemplo 123, Luanda",
-    "horario": "Segunda a sexta 08h-18h; sábado 08h-13h",
-    "servicos": {
-      "Consulta de avaliação": "gratuita",
-      "Limpeza dentária": "preço sob consulta",
-      "Branqueamento": "preço sob consulta"
-    },
-    "pagamento": "Dinheiro, transferência e multicaixa",
-    "perguntas_frequentes": {
-      "Atendem urgências?": "Sim, ligue para o número da clínica.",
-      "Preciso de marcação?": "Sim, marque por aqui no WhatsApp."
-    }
+    "morada": "",
+    "horario": "",
+    "contacto": "",
+    "servicos": {},
+    "produtos": {},
+    "pagamento": "",
+    "entrega": "",
+    "politicas": "",
+    "perguntas_frequentes": {}
   },
-  "extra": "Substituir todo este ficheiro pelas informações reais de cada cliente."
+  "operacoes": {
+    "agendamentos": true,
+    "reservas": true,
+    "encomendas": true,
+    "orcamentos": true
+  },
+  "extra": ""
 }

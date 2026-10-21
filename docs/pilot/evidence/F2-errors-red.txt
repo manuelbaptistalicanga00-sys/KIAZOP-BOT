@@ -1,0 +1,100 @@
+FFFFFFFF                                                                 [100%]
+=================================== FAILURES ===================================
+______________ test_ai_failure_classes[401-authentication-False] _______________
+
+status = 401, category = 'authentication', retry = False
+
+    @pytest.mark.parametrize('status,category,retry', [(401,'authentication',False),(403,'permission',False),(404,'model',False),(429,'rate_limit',True),(500,'unavailable',True),(400,'invalid_request',False)])
+    def test_ai_failure_classes(status, category, retry):
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:48: ImportError
+________________ test_ai_failure_classes[403-permission-False] _________________
+
+status = 403, category = 'permission', retry = False
+
+    @pytest.mark.parametrize('status,category,retry', [(401,'authentication',False),(403,'permission',False),(404,'model',False),(429,'rate_limit',True),(500,'unavailable',True),(400,'invalid_request',False)])
+    def test_ai_failure_classes(status, category, retry):
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:48: ImportError
+___________________ test_ai_failure_classes[404-model-False] ___________________
+
+status = 404, category = 'model', retry = False
+
+    @pytest.mark.parametrize('status,category,retry', [(401,'authentication',False),(403,'permission',False),(404,'model',False),(429,'rate_limit',True),(500,'unavailable',True),(400,'invalid_request',False)])
+    def test_ai_failure_classes(status, category, retry):
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:48: ImportError
+_________________ test_ai_failure_classes[429-rate_limit-True] _________________
+
+status = 429, category = 'rate_limit', retry = True
+
+    @pytest.mark.parametrize('status,category,retry', [(401,'authentication',False),(403,'permission',False),(404,'model',False),(429,'rate_limit',True),(500,'unavailable',True),(400,'invalid_request',False)])
+    def test_ai_failure_classes(status, category, retry):
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:48: ImportError
+________________ test_ai_failure_classes[500-unavailable-True] _________________
+
+status = 500, category = 'unavailable', retry = True
+
+    @pytest.mark.parametrize('status,category,retry', [(401,'authentication',False),(403,'permission',False),(404,'model',False),(429,'rate_limit',True),(500,'unavailable',True),(400,'invalid_request',False)])
+    def test_ai_failure_classes(status, category, retry):
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:48: ImportError
+______________ test_ai_failure_classes[400-invalid_request-False] ______________
+
+status = 400, category = 'invalid_request', retry = False
+
+    @pytest.mark.parametrize('status,category,retry', [(401,'authentication',False),(403,'permission',False),(404,'model',False),(429,'rate_limit',True),(500,'unavailable',True),(400,'invalid_request',False)])
+    def test_ai_failure_classes(status, category, retry):
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:48: ImportError
+____________________________ test_ai_timeout_class _____________________________
+
+    def test_ai_timeout_class():
+        import httpx
+>       from ai_service import classify
+E       ImportError: cannot import name 'classify' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:56: ImportError
+________________________ test_ai_retries_only_transient ________________________
+
+    def test_ai_retries_only_transient():
+        import httpx
+>       from ai_service import retry_call
+E       ImportError: cannot import name 'retry_call' from 'ai_service' (/home/user/KIAZOP-BOT/ai_service.py)
+
+tests/test_phase2.py:62: ImportError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/user/KIAZOP-BOT/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_phase2.py::test_ai_failure_classes[401-authentication-False]
+FAILED tests/test_phase2.py::test_ai_failure_classes[403-permission-False] - ...
+FAILED tests/test_phase2.py::test_ai_failure_classes[404-model-False] - Impor...
+FAILED tests/test_phase2.py::test_ai_failure_classes[429-rate_limit-True] - I...
+FAILED tests/test_phase2.py::test_ai_failure_classes[500-unavailable-True] - ...
+FAILED tests/test_phase2.py::test_ai_failure_classes[400-invalid_request-False]
+FAILED tests/test_phase2.py::test_ai_timeout_class - ImportError: cannot impo...
+FAILED tests/test_phase2.py::test_ai_retries_only_transient - ImportError: ca...
+8 failed, 3 deselected, 1 warning in 0.94s
