@@ -1,7 +1,8 @@
 # KIAZOP · Central de atendimento inteligente
 
-Assistente WhatsApp Cloud API + Claude, com painel responsivo em português,
-histórico de conversas, transferência para a equipa e solicitações de marcação.
+Assistente multissetor WhatsApp Cloud API + Claude, com painel responsivo em português,
+histórico de conversas, transferência para a equipa e solicitações de agendamento,
+reserva, encomenda e orçamento. Não é exclusivo para clínicas.
 
 ## Executar sem credenciais (demonstração)
 
@@ -22,14 +23,14 @@ uvicorn bot:app --host 0.0.0.0 --port 8000
 Abra `/painel` e introduza a chave. No **Laboratório**, teste serviços, horários,
 localização e transferência para humano. A demonstração usa regras locais, não
 Claude, não envia WhatsApp e começa sem clientes fictícios. Não use a mesma base
-de dados de produção. As informações em `negocio.json` são apenas exemplos.
+de dados de produção. Configure as informações reais em **O meu negócio**. O perfil inicial é neutro e não contém preços, horários ou moradas fictícios.
 
 ## Configurar atendimento real
 
 1. Defina `DEMO_MODE=false` e use uma base de dados exclusiva de produção.
 2. Preencha `ANTHROPIC_API_KEY`, `WA_TOKEN`, `WA_PHONE_ID`, `VERIFY_TOKEN`,
    `APP_SECRET`, `ADMIN_KEY` e, opcionalmente, `OWNER_PHONE`.
-3. Substitua os dados de exemplo em `negocio.json`. São relidos a cada resposta.
+3. Em **O meu negócio**, configure o nome, setor, catálogo, horários e operações. O perfil guardado na base de dados é aplicado a cada resposta.
 4. Publique em HTTPS e configure `https://SEU-DOMINIO/webhook` na Meta,
    usando o mesmo `VERIFY_TOKEN`. Subscreva o campo `messages`.
 5. Confirme o acesso ao modelo escolhido em `MODEL` e a versão Graph em
@@ -149,3 +150,42 @@ a ligação PostgreSQL real e o deploy devem ser validados com o ambiente conect
 Quando `DIRECT_URL` está definida, tem prioridade sobre `DATABASE_URL`. Isto permite
 manter a URL do pool fornecida pela integração e usar uma ligação direta para os locks
 de sessão. Configure estas variáveis no ambiente Production antes do deploy.
+
+
+## Versão 3.1 — Um assistente para diferentes tipos de negócio
+
+No painel, abra **O meu negócio**. Há modelos para comércio, restauração, beleza,
+oficinas, serviços, ensino, alojamento e saúde, além de um perfil geral. O setor
+é um campo livre: também pode configurar negócios que não estejam nesta lista.
+Os modelos sugerem operações, mas não inventam catálogo nem condições comerciais.
+Aplicar um modelo só altera o formulário; é preciso **Guardar negócio** para ativar.
+
+Configure:
+- Nome, setor, tom, contacto, localização e horários.
+- Produtos/menu e serviços no formato `Nome | preço ou descrição`, um por linha.
+- Formas de pagamento, entrega, levantamento e políticas reais.
+- Perguntas frequentes no formato `Pergunta | resposta`, uma por linha.
+- Operações permitidas: agendamentos, reservas, encomendas e orçamentos.
+
+O perfil é validado e persistido em `business_config` no PostgreSQL/SQLite, sem
+precisar de editar código nem republicar. Se ainda não guardou um perfil, o bot
+usa `negocio.json` como configuração inicial. Perfis antigos de clínicas continuam
+compatíveis; os históricos e marcações existentes não são apagados.
+Cada gravação reinicia a memória usada pela IA, evitando levar os dados do negócio
+anterior para o novo atendimento. O histórico continua visível no painel.
+
+A aba **Solicitações** reúne as novas operações e as marcações antigas. No modo
+com Claude, o bot recolhe dados e regista solicitações estruturadas após confirmação
+do cliente. Todas continuam **a confirmar pela equipa**: não há integração automática
+com stock, pagamentos, transportadoras ou calendários. Operações desativadas não
+são registadas, mesmo se o modelo emitir uma ação inválida.
+
+O laboratório adapta as respostas locais ao perfil escolhido (catálogo, horários,
+pagamento, entrega e pedidos de dados), mas **não simula o diálogo completo de
+recolha nem cria pedidos automaticamente**. A captura estruturada é validada nos
+testes com respostas de IA simuladas, sem custos externos.
+
+Esta versão suporta **um negócio ativo por instalação**, e não um serviço SaaS
+com várias empresas isoladas no mesmo painel. Mudar de perfil não separa históricos,
+contactos nem pedidos. Para operar várias empresas em simultâneo, use instalações
+e bases separadas até existir gestão multitenant com autenticação por empresa.

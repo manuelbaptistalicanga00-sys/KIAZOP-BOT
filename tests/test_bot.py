@@ -14,7 +14,7 @@ AUTH = {'Authorization': 'Bearer test-admin'}
 
 def setup_function():
     with bot.lock:
-        for table in ('msgs', 'bookings', 'paused', 'seen', 'inbox'):
+        for table in ('msgs', 'bookings', 'paused', 'seen', 'inbox', 'business_config', 'requests'):
             bot.db.execute(f'DELETE FROM {table}')
         bot.db.commit()
 
@@ -35,7 +35,7 @@ def test_demo_and_handoff():
     assert client.post('/api/demo/message', headers=AUTH, json={'text': 'Qual é o horário?'}).status_code == 200
     d = client.get('/api/dashboard', headers=AUTH).json()
     assert d['stats']['messages'] == 2
-    assert '08h' in d['conversations'][0]['messages'][-1]['text']
+    assert 'não configurado' in d['conversations'][0]['messages'][-1]['text']
     client.post('/api/demo/message', headers=AUTH, json={'text': 'Quero um humano'})
     assert client.get('/api/dashboard', headers=AUTH).json()['stats']['paused'] == 1
     client.post('/api/demo/message', headers=AUTH, json={'text': 'Olá'})
@@ -90,3 +90,118 @@ def test_rate_limit(monkeypatch):
     bot.responder('244900000001', 'Olá')
     bot.responder('244900000001', 'Olá novamente')
     assert len(bot.historico('244900000001')) == 3
+
+
+def profile(sector='Loja'):
+    return {
+        'nome': 'Comércio Esperança', 'setor': sector,
+        'informacoes': {'horario': 'Segunda a sexta 08h–17h',
+                        'produtos': {'Camisa': '5.000 Kz'},
+                        'pagamento': 'Multicaixa', 'entrega': 'Levantamento na loja',
+                        'perguntas_frequentes': {'Fazem trocas?': 'Até 7 dias com recibo.'}},
+        'operacoes': {'agendamentos': False, 'reservas': False, 'encomendas': True, 'orcamentos': True},
+    }
+
+
+def test_business_requires_auth_and_validates():
+    assert client.put('/api/business', json=profile()).status_code == 401
+    assert client.get('/api/business/templates').status_code == 401
+    invalid = profile()
+    invalid['nome'] = '   '
+    assert client.put('/api/business', headers=AUTH, json=invalid).status_code == 422
+    invalid = profile()
+    invalid['informacoes']['api_secret'] = 'not-allowed'
+    assert client.put('/api/business', headers=AUTH, json=invalid).status_code == 422
+
+
+def test_profile_persists_and_drives_answers():
+    assert client.put('/api/business', headers=AUTH, json=profile()).status_code == 200
+    saved = client.get('/api/dashboard', headers=AUTH).json()['business']
+    assert saved['nome'] == 'Comércio Esperança'
+    assert saved['setor'] == 'Loja'
+    assert '5.000 Kz' in bot.resposta_demo('Quais produtos têm?')
+    assert '08h' in bot.resposta_demo('Qual o horário?')
+    assert 'Multicaixa' in bot.resposta_demo('Como posso pagar?')
+    assert '7 dias' in bot.resposta_demo('Fazem trocas?')
+    assert 'nome, produto/variante, quantidade' in bot.resposta_demo('Quero encomendar')
+    assert 'Não recolhemos' in bot.resposta_demo('Quero agendar')
+    assert 'Clínica Sorriso' not in bot.sistema()
+    assert 'Comércio Esperança' in bot.sistema()
+
+
+def test_templates_without_invented_business_facts():
+    profiles = client.get('/api/business/templates', headers=AUTH).json()
+    assert len(profiles) == 9
+    for item in profiles:
+        assert not item['profile']['informacoes']['produtos']
+        assert not item['profile']['informacoes']['horario']
+    restaurant = next(t['profile'] for t in profiles if t['id'] == 'restaurante')
+    client.put('/api/business', headers=AUTH, json=restaurant)
+    assert 'quantidade de pessoas' in bot.resposta_demo('Quero reservar')
+    assert 'Não recolhemos' in bot.resposta_demo('Quero agendar')
+
+
+def test_profile_save_resets_ai_context_without_deleting_history():
+    bot.responder('244900000001', 'Olá')
+    assert len(bot.historico('244900000001')) == 2
+    client.put('/api/business', headers=AUTH, json=profile())
+    assert bot.historico('244900000001') == []
+    assert client.get('/api/dashboard', headers=AUTH).json()['stats']['messages'] == 2
+    bot.responder('244900000001', 'Quais produtos têm?')
+    assert len(bot.historico('244900000001')) == 2
+
+
+def test_general_requests_registered_and_deduplicated(monkeypatch):
+    client.put('/api/business', headers=AUTH, json=profile())
+    text = 'A equipa confirmará a sua solicitação. [SOLICITACAO]' + json.dumps({
+        'tipo': 'encomenda', 'nome': 'Ana', 'descricao': '2 camisas tamanho M', 'preferencia': 'Levantamento'})
+    monkeypatch.setattr(bot, 'resposta_demo', lambda _: text)
+    for _ in range(2):
+        bot.responder('244900000001', 'Confirmo os detalhes')
+    d = client.get('/api/dashboard', headers=AUTH).json()
+    assert d['stats']['requests'] == 1
+    assert d['requests'][0]['tipo'] == 'encomenda'
+    assert '[SOLICITACAO]' not in d['conversations'][0]['messages'][-1]['text']
+
+
+def test_disabled_and_invalid_requests_not_saved(monkeypatch):
+    client.put('/api/business', headers=AUTH, json=profile())
+    for request in [
+        {'tipo': 'reserva', 'nome': 'Ana', 'descricao': 'Mesa', 'preferencia': 'Amanhã'},
+        {'tipo': 'encomenda', 'nome': '', 'descricao': 'Camisa'},
+        {'tipo': 'encomenda', 'nome': 'Ana', 'descricao': 'x' * 1201},
+        {'tipo': ['encomenda'], 'nome': 'Ana', 'descricao': 'Camisa'},
+    ]:
+        monkeypatch.setattr(bot, 'resposta_demo', lambda _, r=request: 'Pedido [SOLICITACAO]' + json.dumps(r))
+        bot.responder('244900000001', 'Confirmo')
+    assert client.get('/api/dashboard', headers=AUTH).json()['stats']['requests'] == 0
+
+
+def test_legacy_clinic_config_remains_compatible():
+    from business import BusinessProfile
+    old = {'nome': 'Clínica Exemplo', 'tom': 'Profissional', 'informacoes': {'servicos': {'Avaliação': 'Sob consulta'}}}
+    assert BusinessProfile.model_validate(old).informacoes.servicos['Avaliação'] == 'Sob consulta'
+
+
+def test_each_operation_can_be_registered_when_enabled(monkeypatch):
+    p = profile('Geral personalizado')
+    p['operacoes'] = {key: True for key in ('agendamentos', 'reservas', 'encomendas', 'orcamentos')}
+    client.put('/api/business', headers=AUTH, json=p)
+    for kind in ('agendamento', 'reserva', 'encomenda', 'orcamento'):
+        details = {'tipo': kind, 'nome': 'Cliente', 'descricao': 'Solicitação confirmada pelo cliente',
+                   'preferencia': 'Amanhã às 10h' if kind in ('agendamento', 'reserva') else ''}
+        monkeypatch.setattr(bot, 'resposta_demo', lambda _, r=details: 'A equipa confirmará. [SOLICITACAO]' + json.dumps(r))
+        bot.responder('244900000001', 'Confirmo')
+    d = client.get('/api/dashboard', headers=AUTH).json()
+    assert d['stats']['requests'] == 4
+    assert {r['tipo'] for r in d['requests']} == {'agendamento', 'reserva', 'encomenda', 'orcamento'}
+
+
+def test_reservation_without_date_is_rejected(monkeypatch):
+    p = profile()
+    p['operacoes']['reservas'] = True
+    client.put('/api/business', headers=AUTH, json=p)
+    monkeypatch.setattr(bot, 'resposta_demo', lambda _: 'Pedido [SOLICITACAO]' + json.dumps({
+        'tipo': 'reserva', 'nome': 'Ana', 'descricao': 'Mesa para duas pessoas', 'preferencia': ' '}))
+    bot.responder('244900000001', 'Confirmo')
+    assert client.get('/api/dashboard', headers=AUTH).json()['requests'] == []

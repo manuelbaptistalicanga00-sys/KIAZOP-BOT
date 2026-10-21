@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let token = sessionStorage.getItem('kiazop-key') || '', data, selected, tab = 'overview';
-const names = {overview:['Visão geral','Uma visão clara do seu negócio.'], conversations:['Conversas','Cada conversa merece atenção.'], bookings:['Agendamentos','Organize os próximos encontros.'], simulator:['Laboratório','Um espaço para experimentar.']};
+const names = {overview:['Visão geral','Uma visão clara do seu negócio.'], conversations:['Conversas','Cada conversa merece atenção.'], bookings:['Solicitações','Pedidos, reservas e novas oportunidades.'], simulator:['Laboratório','Um espaço para experimentar.'], settings:['O meu negócio','Um assistente à medida do seu negócio.']};
 const el = (tag, text, cls) => { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; };
 async function api(path, options={}) {
  const res = await fetch(path, {...options, headers:{'Authorization':`Bearer ${token}`, 'Content-Type':'application/json', ...options.headers}});
@@ -10,10 +10,10 @@ async function api(path, options={}) {
  return res.json();
 }
 function showLogin(){ $('login').hidden=false; $('workspace').hidden=true; }
-function switchTab(name){ tab=name; document.querySelectorAll('.tab').forEach(n=>n.hidden=n.id!==name); document.querySelectorAll('nav button').forEach(n=>n.classList.toggle('active',n.dataset.tab===name)); $('breadcrumb').textContent=names[name][0]; $('title').textContent=names[name][1]; }
+function switchTab(name){ tab=name; document.querySelectorAll('.tab').forEach(n=>n.hidden=n.id!==name); document.querySelectorAll('nav button').forEach(n=>n.classList.toggle('active',n.dataset.tab===name)); $('breadcrumb').textContent=names[name][0]; $('title').textContent=names[name][1]; if(name==='settings')loadTemplates().catch(e=>$('business-feedback').textContent=e.message); }
 document.querySelectorAll('[data-tab]').forEach(n=>n.addEventListener('click',()=>switchTab(n.dataset.tab)));
 $('open-simulator').onclick=()=>switchTab('simulator');
-$('logout').onclick=()=>{token='';sessionStorage.removeItem('kiazop-key');data=null;showLogin();};
+$('logout').onclick=()=>{businessDirty=false;token='';sessionStorage.removeItem('kiazop-key');data=null;showLogin();};
 $('login-form').onsubmit=async e=>{e.preventDefault();token=$('key').value; $('login-error').textContent='';try{await refresh();sessionStorage.setItem('kiazop-key',token);$('key').value='';}catch(err){$('login-error').textContent=err.message;}};
 $('refresh').onclick=()=>refresh().catch(err=>$('notice').textContent=err.message);
 function badge(paused){return el('span',paused?'Com a equipa':'Assistente ativo','badge'+(paused?' human':''));}
@@ -21,14 +21,22 @@ function renderChat(container, messages){container.replaceChildren(); if(!messag
 async function refresh(){
  $('refresh').disabled=true;
  try{data=await api('/api/dashboard');$('login').hidden=true;$('workspace').hidden=false;
- $('business').replaceChildren(document.createTextNode(data.business.nome),el('small','Central de atendimento'));
+ $('business').replaceChildren(document.createTextNode(data.business.nome),el('small',data.business.setor || 'Central de atendimento'));
+ $('business-initials').textContent=data.business.nome.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
  $('mode').textContent=data.demo?'● Demonstração local':'● Modo produção';
  $('notice').textContent=data.demo?'Modo demonstração: dados deste ambiente, respostas locais e nenhum envio externo.':(data.stats.failed?`${data.stats.failed} mensagem(ns) com falha. `:'');
  if(data.stats.failed){const b=el('button','Reprocessar falhas','outline');b.onclick=async()=>{try{await api('/api/inbox/retry',{method:'POST'});$('notice').textContent='Reprocessamento solicitado. Atualize os dados dentro de instantes.';}catch(e){$('notice').textContent=e.message;}};$('notice').append(b);}
  $('metrics').replaceChildren();
- [['Clientes atendidos',data.stats.clients,'Clientes únicos neste ambiente','♙'],['Mensagens',data.stats.messages,'Mensagens guardadas no histórico','☷'],['Marcações',data.stats.bookings,'Solicitações a confirmar pela equipa','▦'],['Com a equipa',data.stats.paused,'Conversas com o bot em pausa','♧']].forEach(([label,note,desc,icon])=>{const card=el('div',undefined,'metric');const l=el('div',label,'metric-label');l.append(el('span',icon,'icon'));card.append(l,el('strong',String(note).padStart(2,'0')),el('small',desc));$('metrics').append(card);});
+ [['Clientes atendidos',data.stats.clients,'Clientes únicos neste ambiente','♙'],['Mensagens',data.stats.messages,'Mensagens guardadas no histórico','☷'],['Solicitações',data.stats.bookings+data.stats.requests,'Pedidos a confirmar pela equipa','▦'],['Com a equipa',data.stats.paused,'Conversas com o bot em pausa','♧']].forEach(([label,note,desc,icon])=>{const card=el('div',undefined,'metric');const l=el('div',label,'metric-label');l.append(el('span',icon,'icon'));card.append(l,el('strong',String(note).padStart(2,'0')),el('small',desc));$('metrics').append(card);});
  $('recent').replaceChildren();data.conversations.slice(0,4).forEach(c=>{const row=el('div',undefined,'recent-row');const info=el('div');info.append(el('strong','+'+c.phone),el('p',c.messages.at(-1)?.text||''));row.append(el('span','CL','avatar'),info,badge(c.paused));$('recent').append(row);});if(!data.conversations.length)$('recent').append(el('div','Ainda está tudo tranquilo por aqui. Experimente o laboratório para iniciar a primeira conversa.','empty'));
- $('booking-rows').replaceChildren();data.bookings.forEach(b=>{const tr=el('tr');[b.nome,b.servico,b.data_hora,'+'+b.phone,'A confirmar'].forEach(v=>tr.append(el('td',v)));$('booking-rows').append(tr);});if(!data.bookings.length){const td=el('td','Sem solicitações de marcação.');td.colSpan=5;const tr=el('tr');tr.append(td);$('booking-rows').append(tr);}
+ $('booking-rows').replaceChildren();
+ const kindLabels={agendamento:'Agendamento',reserva:'Reserva',encomenda:'Encomenda',orcamento:'Orçamento'};
+ const requests=[...data.requests,...data.bookings.map(b=>({...b,tipo:'agendamento',descricao:b.servico,preferencia:b.data_hora}))].sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+ requests.forEach(b=>{const tr=el('tr');[kindLabels[b.tipo]||b.tipo,b.nome,b.descricao,b.preferencia||'—','+'+b.phone,'A confirmar'].forEach(v=>tr.append(el('td',v)));$('booking-rows').append(tr);});
+ if(!requests.length){const td=el('td','Sem solicitações por enquanto.');td.colSpan=6;const tr=el('tr');tr.append(td);$('booking-rows').append(tr);}
+ if(!businessDirty)fillBusiness(data.business);
+ if(!Object.keys(data.business.informacoes.produtos).length&&!Object.keys(data.business.informacoes.servicos).length){const b=el('button','Configurar o meu negócio','outline');b.onclick=()=>switchTab('settings');$('notice').append(document.createTextNode(' Configure os dados reais antes de atender clientes. '),b);}
+
  renderConversations();renderDemo();
  }finally{$('refresh').disabled=false;}
 }
@@ -40,5 +48,53 @@ function renderConversations(){
 $('search').oninput=()=>data&&renderConversations();
 function renderDemo(){const c=data.conversations.find(c=>c.phone==='244900000001');if(c)renderChat($('demo-chat'),c.messages);$('demo-form').hidden=!data.demo; if(!data.demo)$('demo-chat').replaceChildren(el('div','O laboratório está disponível apenas em DEMO_MODE. O atendimento real continua no WhatsApp.','empty'));if(c?.paused&&data.demo){const b=el('button','Reativar assistente de teste','outline');b.onclick=async()=>{try{await api('/api/conversations/244900000001/pause',{method:'POST',body:JSON.stringify({paused:false})});await refresh();}catch(e){$('notice').textContent=e.message;}};$('demo-chat').append(b);}}
 $('demo-form').onsubmit=async e=>{e.preventDefault();const text=$('demo-text').value.trim();if(!text)return;const button=e.target.querySelector('button');button.disabled=true;try{await api('/api/demo/message',{method:'POST',body:JSON.stringify({text})});$('demo-text').value='';await refresh();}catch(err){$('notice').textContent=err.message;}finally{button.disabled=false;}};
-document.querySelectorAll('#suggestions button').forEach(b=>b.onclick=()=>{$('demo-text').value=b.textContent;$('demo-text').focus();});
+$('suggestions').onclick=e=>{if(e.target.tagName==='BUTTON'){$('demo-text').value=e.target.textContent;$('demo-text').focus();}};
+let businessDirty=false, sectorTemplates=[], templatesPromise;
+const fields={name:'nome',sector:'setor',tone:'tom',extra:'extra'};
+const infoFields={contact:'contacto',address:'morada',hours:'horario',payment:'pagamento',delivery:'entrega',policies:'politicas'};
+const dictionaryFields={products:'produtos',services:'servicos',faq:'perguntas_frequentes'};
+const operationFields=['agendamentos','reservas','encomendas','orcamentos'];
+function fillBusiness(profile){
+ Object.entries(fields).forEach(([id,key])=>$('cfg-'+id).value=profile[key]||'');
+ Object.entries(infoFields).forEach(([id,key])=>$('cfg-'+id).value=profile.informacoes[key]||'');
+ Object.entries(dictionaryFields).forEach(([id,key])=>$('cfg-'+id).value=Object.entries(profile.informacoes[key]||{}).map(([k,v])=>k+' | '+v.replace(/\n/g,' ')).join('\n'));
+ operationFields.forEach(key=>$('cfg-'+key).checked=!!profile.operacoes[key]);
+}
+function parseDictionary(text){
+ const result=Object.create(null);
+ for(const line of text.split('\n').filter(l=>l.trim())){
+  const sep=line.indexOf('|'); const key=line.slice(0,sep).trim(); const value=line.slice(sep+1).trim();
+  if(sep<1||!key||!value)throw Error('Catálogo e perguntas frequentes: use uma linha por item no formato Nome | descrição.');
+  if(Object.hasOwn(result,key))throw Error('Existe um item repetido: '+key);
+  result[key]=value;
+ }
+ return result;
+}
+$('business-form').oninput=()=>{businessDirty=true;$('business-feedback').textContent='Alterações por guardar.';};
+async function loadTemplates(){
+ if(sectorTemplates.length)return;
+ if(!templatesPromise){templatesPromise=api('/api/business/templates').then(items=>{
+ sectorTemplates=items;
+ sectorTemplates.forEach(t=>{const o=el('option',t.label);o.value=t.id;$('profile-template').append(o);});
+ }).catch(error=>{templatesPromise=undefined;throw error;});}
+ return templatesPromise;
+}
+$('profile-template').onfocus=()=>loadTemplates().catch(e=>$('business-feedback').textContent=e.message);
+$('load-template').onclick=async()=>{
+ try{await loadTemplates();const template=sectorTemplates.find(t=>t.id===$('profile-template').value);
+ if(!template){$('business-feedback').textContent='Escolha um modelo de setor primeiro.';return;}
+ if(!confirm('Aplicar o modelo limpa os campos do formulário, mas só altera o negócio depois de guardar. Continuar?'))return;
+ fillBusiness(template.profile);businessDirty=true;$('business-feedback').textContent='Modelo aplicado. Preencha os dados reais e guarde.';
+ }catch(e){$('business-feedback').textContent=e.message;}
+};
+$('business-form').onsubmit=async e=>{
+ e.preventDefault();$('save-business').disabled=true;$('business-feedback').textContent='A guardar…';
+ try{const profile={informacoes:{},operacoes:{}};
+ Object.entries(fields).forEach(([id,key])=>profile[key]=$('cfg-'+id).value.trim());
+ Object.entries(infoFields).forEach(([id,key])=>profile.informacoes[key]=$('cfg-'+id).value.trim());
+ Object.entries(dictionaryFields).forEach(([id,key])=>profile.informacoes[key]=parseDictionary($('cfg-'+id).value));
+ operationFields.forEach(key=>profile.operacoes[key]=$('cfg-'+key).checked);
+ await api('/api/business',{method:'PUT',body:JSON.stringify(profile)});businessDirty=false;await refresh();$('business-feedback').textContent='Negócio guardado. O assistente já usa estas informações.';
+ }catch(err){$('business-feedback').textContent=err.message;}finally{$('save-business').disabled=false;}
+};
 if(token)refresh().catch(e=>$('login-error').textContent=e.message);else showLogin();
