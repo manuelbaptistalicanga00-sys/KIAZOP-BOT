@@ -189,3 +189,15 @@ Esta versão suporta **um negócio ativo por instalação**, e não um serviço 
 com várias empresas isoladas no mesmo painel. Mudar de perfil não separa históricos,
 contactos nem pedidos. Para operar várias empresas em simultâneo, use instalações
 e bases separadas até existir gestão multitenant com autenticação por empresa.
+
+## Plano premium e evolução enterprise
+
+O plano de produto/comercial em dez etapas está em
+[`docs/enterprise/PLANO_PREMIUM.md`](docs/enterprise/PLANO_PREMIUM.md).
+Inclui pricing, ROI hipotético, textos prontos, arquitectura Neon e onboarding WhatsApp.
+A proposta em PDF encontra-se em `docs/enterprise/PROPOSTA_COMERCIAL.pdf`.
+
+O [`enterprise-kit/`](enterprise-kit/README.md) é um kit **separado de referência**:
+componente React, adapters Meta/QR, SQL com RLS e contexto Drizzle, runner de migrações
+e testes. Não altera a instalação existente, não é uma migração automática nem um
+SaaS enterprise de produção completo. Ver bloqueadores de go-live no seu README.
